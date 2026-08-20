@@ -21,6 +21,7 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
   const [sel, setSel] = useState('');
   const [fbOpen, setFbOpen] = useState(false);
   const [fbText, setFbText] = useState('');
+  const [confirmReplyId, setConfirmReplyId] = useState(null);
   const replyRef = useRef(null);
 
   useEffect(() => {
@@ -30,6 +31,7 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
     setSel('');
     setFbOpen(false);
     setFbText('');
+    setConfirmReplyId(null);
   }, [comment?.id]);
 
   const handleSelect = (e) => {
@@ -145,6 +147,30 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
               <div className="bubble">
                 <div className="bubble-meta">{r.isPageAuthor ? page?.name || 'Your page' : r.from?.name || 'Facebook user'}</div>
                 <p>{r.message}</p>
+              </div>
+              <div className="bubble-tools">
+                {confirmReplyId === r.id ? (
+                  <span className="confirm-inline">
+                    Delete?
+                    <button
+                      className="link-btn danger-link"
+                      onClick={() => { act('deleteReply', r); setConfirmReplyId(null); }}
+                    >
+                      Yes
+                    </button>
+                    <button className="link-btn muted" onClick={() => setConfirmReplyId(null)}>No</button>
+                  </span>
+                ) : (
+                  <button
+                    className="card-tool danger"
+                    title="Delete this reply"
+                    aria-label="Delete this reply"
+                    disabled={r.can_remove === false || r.id.startsWith('tmp_')}
+                    onClick={() => setConfirmReplyId(r.id)}
+                  >
+                    <TrashIcon size={13} />
+                  </button>
+                )}
               </div>
             </div>
           ))}

@@ -259,6 +259,17 @@ export default function App() {
         runInBackground(api.hide(comment.id, pageId, payload), snapshot, 'Hide failed');
         break;
       }
+      case 'deleteReply':
+        applyOptimistic((cs) =>
+          cs.map((c) =>
+            c.id === comment.id
+              ? { ...c, replies: (c.replies || []).filter((r) => r.id !== payload.id) }
+              : c
+          )
+        );
+        toast('Reply deleted');
+        runInBackground(api.remove(payload.id, pageId), snapshot, 'Delete failed');
+        break;
       case 'delete':
         sweepThen(comment.id, () =>
           applyOptimistic((cs) => cs.filter((c) => c.id !== comment.id))

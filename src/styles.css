@@ -542,6 +542,16 @@ a { color: var(--ember); text-decoration: none; }
 .bubble-row.own { flex-direction: row-reverse; }
 .bubble-row.dim { opacity: 0.65; }
 
+.bubble-tools {
+  align-self: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  display: flex;
+  align-items: center;
+}
+.bubble-row:hover .bubble-tools,
+.bubble-tools:focus-within { opacity: 1; }
+
 .bubble {
   background: var(--card);
   border: 1px solid var(--line);

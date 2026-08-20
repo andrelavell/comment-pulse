@@ -175,7 +175,16 @@ export const service = {
   async remove(commentId, pageId) {
     await actions.remove(commentId, pageId);
     await this.review([commentId], true);
-    await this.updateCachedComments(pageId, (cs) => cs.filter((c) => c.id !== commentId));
+    // The id may be a top-level comment or a nested reply.
+    await this.updateCachedComments(pageId, (cs) =>
+      cs
+        .filter((c) => c.id !== commentId)
+        .map((c) =>
+          c.replies?.some((r) => r.id === commentId)
+            ? { ...c, replies: c.replies.filter((r) => r.id !== commentId) }
+            : c
+        )
+    );
     return { ok: true };
   },
 
