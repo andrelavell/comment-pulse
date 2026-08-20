@@ -155,7 +155,15 @@ export default function App() {
     setTimeout(() => {
       setSweeping((s) => { const n = new Set(s); n.delete(id); return n; });
       fn();
-    }, 260);
+    }, 360);
+  };
+
+  const [pulsing, setPulsing] = useState(new Set());
+  const pulseCard = (id) => {
+    setPulsing((s) => new Set(s).add(id));
+    setTimeout(() => {
+      setPulsing((s) => { const n = new Set(s); n.delete(id); return n; });
+    }, 700);
   };
 
   // All actions are optimistic: the queue updates instantly and the API call
@@ -234,19 +242,27 @@ export default function App() {
         );
         break;
       }
-      case 'hide':
-        applyOptimistic((cs) =>
-          cs.map((c) =>
-            c.id === comment.id
-              ? { ...c, is_hidden: payload, reviewed: payload ? true : c.reviewed }
-              : c
-          )
-        );
+      case 'hide': {
+        const apply = () =>
+          applyOptimistic((cs) =>
+            cs.map((c) =>
+              c.id === comment.id
+                ? { ...c, is_hidden: payload, reviewed: payload ? true : c.reviewed }
+                : c
+            )
+          );
+        // Hiding removes the card from the To review queue: sweep it out.
+        // Anywhere else the card stays, so pulse it to confirm the change.
+        if (payload && tab === 'review') sweepThen(comment.id, apply);
+        else { apply(); pulseCard(comment.id); }
         toast(payload ? 'Comment hidden and marked reviewed' : 'Comment is visible again');
         runInBackground(api.hide(comment.id, pageId, payload), snapshot, 'Hide failed');
         break;
+      }
       case 'delete':
-        applyOptimistic((cs) => cs.filter((c) => c.id !== comment.id));
+        sweepThen(comment.id, () =>
+          applyOptimistic((cs) => cs.filter((c) => c.id !== comment.id))
+        );
         if (selectedId === comment.id) setSelectedId(null);
         toast('Comment deleted');
         runInBackground(api.remove(comment.id, pageId), snapshot, 'Delete failed');
@@ -319,6 +335,7 @@ export default function App() {
         loading={loading}
         queueTotal={queueTotal.current}
         sweeping={sweeping}
+        pulsing={pulsing}
         onQuickAction={handleAction}
         onOpenSettings={() => setSettingsOpen(true)}
       />

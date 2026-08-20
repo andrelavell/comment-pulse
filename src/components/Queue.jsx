@@ -13,7 +13,7 @@ const FILTERS = [
 
 export default function Queue({
   page, comments, tab, setTab, filter, setFilter, selectedId, onSelect,
-  onReview, onReviewAll, onRefresh, loading, queueTotal, sweeping,
+  onReview, onReviewAll, onRefresh, loading, queueTotal, sweeping, pulsing,
   onQuickAction, onOpenSettings,
 }) {
   const [confirmAll, setConfirmAll] = useState(false);
@@ -124,6 +124,7 @@ export default function Queue({
               'card',
               c.id === selectedId ? 'selected' : '',
               sweeping.has(c.id) ? 'sweep-out' : '',
+              pulsing?.has(c.id) ? 'pulse' : '',
               c.is_hidden ? 'is-hidden' : '',
             ].join(' ')}
             onClick={() => onSelect(c.id)}
