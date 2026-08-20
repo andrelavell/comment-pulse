@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { fullTime } from '../api.js';
+import { api, fullTime } from '../api.js';
 import {
   CheckIcon, ReplyIcon, EyeIcon, EyeOffIcon, TrashIcon, BanIcon, ThumbIcon, ExternalIcon, SparkIcon,
 } from './icons.jsx';
@@ -22,6 +22,7 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
   const [fbOpen, setFbOpen] = useState(false);
   const [fbText, setFbText] = useState('');
   const [confirmReplyId, setConfirmReplyId] = useState(null);
+  const [translations, setTranslations] = useState({}); // id -> text | 'loading' | null(hidden)
   const replyRef = useRef(null);
 
   useEffect(() => {
@@ -32,7 +33,45 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
     setFbOpen(false);
     setFbText('');
     setConfirmReplyId(null);
+    setTranslations({});
   }, [comment?.id]);
+
+  const toggleTranslate = async (id, text) => {
+    const current = translations[id];
+    if (current === 'loading') return;
+    if (typeof current === 'string') {
+      // toggle visibility off, keep the cached text under a hidden key
+      setTranslations((t) => ({ ...t, [id]: null, [`_${id}`]: current }));
+      return;
+    }
+    if (current === null && translations[`_${id}`]) {
+      setTranslations((t) => ({ ...t, [id]: t[`_${id}`] }));
+      return;
+    }
+    setTranslations((t) => ({ ...t, [id]: 'loading' }));
+    try {
+      const { translation } = await api.translate(text);
+      setTranslations((t) => ({ ...t, [id]: translation }));
+    } catch {
+      setTranslations((t) => ({ ...t, [id]: undefined }));
+    }
+  };
+
+  const TranslateButton = ({ id, text }) =>
+    text ? (
+      <button className="translate-btn" onClick={() => toggleTranslate(id, text)}>
+        {translations[id] === 'loading'
+          ? 'Translating…'
+          : typeof translations[id] === 'string'
+            ? 'Hide translation'
+            : 'Translate'}
+      </button>
+    ) : null;
+
+  const Translation = ({ id }) =>
+    typeof translations[id] === 'string' && translations[id] !== 'loading' ? (
+      <p className="translation">{translations[id]}</p>
+    ) : null;
 
   const handleSelect = (e) => {
     if (fbOpen) return;
@@ -129,10 +168,12 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
                 {comment.authorBanned && <span className="flag banned"><BanIcon size={11} /> banned</span>}
               </div>
               <p>{comment.message || <em>(no text)</em>}</p>
+              <Translation id={comment.id} />
               {comment.attachment?.media?.image?.src && (
                 <img className="bubble-attachment" src={comment.attachment.media.image.src} alt="attachment" />
               )}
               <div className="bubble-foot mono">
+                <TranslateButton id={comment.id} text={comment.message} />
                 {comment.like_count > 0 && <span>{comment.like_count} likes</span>}
                 {comment.permalink_url && (
                   <a href={comment.permalink_url} target="_blank" rel="noreferrer">open on Facebook <ExternalIcon size={11} /></a>
@@ -147,6 +188,12 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
               <div className="bubble">
                 <div className="bubble-meta">{r.isPageAuthor ? page?.name || 'Your page' : r.from?.name || 'Facebook user'}</div>
                 <p>{r.message}</p>
+                <Translation id={r.id} />
+                {!r.isPageAuthor && (
+                  <div className="bubble-foot mono">
+                    <TranslateButton id={r.id} text={r.message} />
+                  </div>
+                )}
               </div>
               <div className="bubble-tools">
                 {confirmReplyId === r.id ? (

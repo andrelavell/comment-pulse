@@ -45,6 +45,37 @@ export async function deleteFeedback(id) {
   await kvSet('moderation', FEEDBACK_KEY, list.filter((f) => f.id !== id));
 }
 
+export async function translateText(text) {
+  const key = env('OPENAI_API_KEY');
+  if (!key) {
+    throw new GraphError({ message: 'No OpenAI API key configured. Add OPENAI_API_KEY to the environment.' }, 400);
+  }
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model: env('OPENAI_TRANSLATE_MODEL') || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Translate the given social media comment into English. Output only the translation, nothing else. If it is already English, output it unchanged.',
+        },
+        { role: 'user', content: text.slice(0, 2000) },
+      ],
+      max_tokens: 600,
+      temperature: 0,
+    }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new GraphError({ message: json.error?.message || `OpenAI error (${res.status})` }, 502);
+  }
+  const translation = json.choices?.[0]?.message?.content?.trim();
+  if (!translation) throw new GraphError({ message: 'Translation came back empty' }, 502);
+  return translation;
+}
+
 export async function draftReply({ comment, instructions, model: modelSetting, reasoning }) {
   const key = env('OPENAI_API_KEY');
   if (!key) {

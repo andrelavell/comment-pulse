@@ -2,7 +2,7 @@
 import { buildAdIndex, fetchPageComments, actions, GraphError } from './graph.js';
 import { kvGet, kvSet } from './storage.js';
 import { loadState, saveState, normalizeSettings } from './store.js';
-import { logReply, draftReply, listFeedback, addFeedback, deleteFeedback } from './ai.js';
+import { logReply, draftReply, translateText, listFeedback, addFeedback, deleteFeedback } from './ai.js';
 
 const AD_INDEX_TTL = 30 * 60 * 1000;
 
@@ -209,6 +209,11 @@ export const service = {
     else delete state.banned[`${pageId}:${userId}`];
     await saveState(state);
     return { ok: true };
+  },
+
+  async translate(text) {
+    if (!text?.trim()) throw new GraphError({ message: 'Nothing to translate' }, 400);
+    return { translation: await translateText(text) };
   },
 
   async listFeedback() {

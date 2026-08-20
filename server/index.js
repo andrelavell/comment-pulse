@@ -57,6 +57,8 @@ app.post('/api/comments/:id/like', wrap(async (req, res) =>
 app.post('/api/pages/:pageId/ban', wrap(async (req, res) =>
   res.json(await service.ban(req.params.pageId, req.body.userId, req.body.banned))));
 
+app.post('/api/translate', wrap(async (req, res) => res.json(await service.translate(req.body.text))));
+
 app.get('/api/feedback', wrap(async (_req, res) => res.json(await service.listFeedback())));
 app.post('/api/feedback', wrap(async (req, res) =>
   res.json(await service.addFeedback(req.body.highlight, req.body.feedback, req.body.comment))));

@@ -579,6 +579,21 @@ a { color: var(--ember); text-decoration: none; }
 .bubble p { margin: 0; line-height: 1.5; font-size: 13.5px; white-space: pre-wrap; word-break: break-word; }
 .bubble-attachment { margin-top: 8px; border-radius: var(--r-sm); max-width: 220px; }
 .bubble-foot { margin-top: 6px; display: flex; gap: 12px; }
+.translate-btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.translate-btn:hover { color: var(--ember); }
+.translation {
+  margin-top: 6px !important;
+  padding: 6px 10px;
+  background: var(--paper);
+  border-left: 2px solid var(--teal);
+  border-radius: 0 8px 8px 0;
+  color: var(--ink-soft) !important;
+  font-size: 13px !important;
+}
 .bubble-foot a { color: var(--ink-faint); display: inline-flex; gap: 3px; align-items: center; }
 .bubble-foot a:hover { color: var(--ember); }
 

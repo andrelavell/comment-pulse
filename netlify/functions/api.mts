@@ -52,6 +52,7 @@ export default async (req: Request, _context: Context) => {
     let m: RegExpMatchArray | null;
 
     if (method === "GET" && path === "/overview") return json(await service.overview());
+    if (method === "POST" && path === "/translate") return json(await service.translate(body.text));
     if (method === "GET" && path === "/feedback") return json(await service.listFeedback());
     if (method === "POST" && path === "/feedback") {
       return json(await service.addFeedback(body.highlight, body.feedback, body.comment));
