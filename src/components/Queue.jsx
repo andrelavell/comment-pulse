@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { timeAgo } from '../api.js';
 import {
   CheckIcon, EyeIcon, EyeOffIcon, TrashIcon, ReplyIcon, RefreshIcon, SparkIcon, GearIcon,
-  ShieldIcon, ThumbIcon, SearchIcon, ClockIcon, SquareCheckIcon,
+  ShieldIcon, ThumbIcon, SearchIcon, ClockIcon, FilterIcon,
 } from './icons.jsx';
 
 const FILTERS = [
@@ -30,9 +30,24 @@ export default function Queue({
   const [query, setQuery] = useState('');
   const [adFilter, setAdFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('any');
-  const [selectMode, setSelectMode] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [checked, setChecked] = useState(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
+  const selecting = checked.size > 0;
+
+  // Esc clears the current selection.
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setChecked(new Set());
+        setConfirmBulkDelete(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selecting]);
 
   // Hidden or page-replied comments count as handled: never in the queue.
   const handled = (c) =>
@@ -70,26 +85,33 @@ export default function Queue({
 
   const done = queueTotal - toReview.length;
   const progress = queueTotal > 0 ? done / queueTotal : 1;
-  const filtersActive = q || adFilter !== 'all' || dateFilter !== 'any' || filter !== 'all';
+  const activeFilters =
+    (filter !== 'all' ? 1 : 0) + (dateFilter !== 'any' ? 1 : 0) + (adFilter !== 'all' ? 1 : 0);
+  const filtersActive = q || activeFilters > 0;
 
-  const checkedComments = list.filter((c) => checked.has(c.id));
+  const checkedComments = comments.filter((c) => checked.has(c.id));
   const toggleChecked = (id) =>
     setChecked((s) => {
       const n = new Set(s);
       n.has(id) ? n.delete(id) : n.add(id);
       return n;
     });
-  const exitSelect = () => {
-    setSelectMode(false);
+  const clearSelection = () => {
     setChecked(new Set());
     setConfirmBulkDelete(false);
   };
   const bulk = (type) => {
     if (checkedComments.length === 0) return;
     onBulk(type, checkedComments);
-    exitSelect();
+    clearSelection();
   };
   const allVisibleChecked = list.length > 0 && list.every((c) => checked.has(c.id));
+
+  const resetFilters = () => {
+    setFilter('all');
+    setDateFilter('any');
+    setAdFilter('all');
+  };
 
   return (
     <section className="queue">
@@ -120,7 +142,7 @@ export default function Queue({
             role="tab"
             aria-selected={tab === id}
             className={`tab ${tab === id ? 'active' : ''}`}
-            onClick={() => { setTab(id); exitSelect(); }}
+            onClick={() => { setTab(id); clearSelection(); }}
           >
             {label} <span className="tab-n">{n}</span>
           </button>
@@ -133,59 +155,107 @@ export default function Queue({
         </div>
       )}
 
-      <div className="queue-search">
-        <SearchIcon size={14} />
-        <input
-          type="search"
-          placeholder="Search comments, authors, ads…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search comments"
-        />
-        {query && (
-          <button className="queue-search-clear" onClick={() => setQuery('')} aria-label="Clear search">×</button>
-        )}
-      </div>
-
-      <div className="queue-tools">
-        <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter comments">
-          {FILTERS.map((f) => (
-            <option key={f.id} value={f.id}>{f.label}</option>
-          ))}
-        </select>
-        <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} aria-label="Filter by date">
-          {DATES.map((d) => (
-            <option key={d.id} value={d.id}>{d.label}</option>
-          ))}
-        </select>
-        {ads.length > 1 && (
-          <select value={adFilter} onChange={(e) => setAdFilter(e.target.value)} aria-label="Filter by ad" className="ad-filter-select">
-            <option value="all">All ads</option>
-            {ads.map(([id, name]) => (
-              <option key={id} value={id}>{name}</option>
-            ))}
-          </select>
-        )}
-        <span className="queue-tools-spacer" />
-        {list.length > 0 && !selectMode && (
-          <button className="link-btn" onClick={() => setSelectMode(true)} title="Select multiple comments">
-            <SquareCheckIcon size={13} /> Select
-          </button>
-        )}
-        {tab === 'review' && list.length > 0 && !selectMode && (
-          confirmAll ? (
+      {selecting ? (
+        <div className="select-bar">
+          <label className="bulk-all">
+            <input
+              type="checkbox"
+              checked={allVisibleChecked}
+              onChange={() =>
+                setChecked(allVisibleChecked ? new Set() : new Set(list.map((c) => c.id)))
+              }
+              aria-label="Select all visible"
+            />
+            <strong>{checked.size}</strong> selected
+          </label>
+          <span className="queue-tools-spacer" />
+          {confirmBulkDelete ? (
             <span className="confirm-inline">
-              Review all {list.length}?
-              <button className="link-btn" onClick={() => { onReviewAll(list); setConfirmAll(false); }}>Yes</button>
-              <button className="link-btn muted" onClick={() => setConfirmAll(false)}>No</button>
+              Delete {checked.size}?
+              <button className="link-btn danger-link" onClick={() => bulk('delete')}>Yes</button>
+              <button className="link-btn muted" onClick={() => setConfirmBulkDelete(false)}>No</button>
             </span>
           ) : (
-            <button className="link-btn" onClick={() => setConfirmAll(true)}>Review all</button>
-          )
-        )}
-      </div>
+            <>
+              <button className="bulk-btn" onClick={() => bulk('review')}>
+                <CheckIcon size={13} /> Review
+              </button>
+              <button className="bulk-btn" onClick={() => bulk('hide')}>
+                <EyeOffIcon size={13} /> Hide
+              </button>
+              <button className="bulk-btn danger" onClick={() => setConfirmBulkDelete(true)}>
+                <TrashIcon size={13} /> Delete
+              </button>
+            </>
+          )}
+          <button className="feedback-x" onClick={clearSelection} title="Clear selection (Esc)" aria-label="Clear selection">×</button>
+        </div>
+      ) : (
+        <div className="queue-bar">
+          <div className="queue-search">
+            <SearchIcon size={13} />
+            <input
+              type="search"
+              placeholder="Search…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search comments"
+            />
+            {query && (
+              <button className="queue-search-clear" onClick={() => setQuery('')} aria-label="Clear search">×</button>
+            )}
+          </div>
+          <button
+            className={`icon-btn filter-toggle ${filtersOpen || activeFilters > 0 ? 'active' : ''}`}
+            onClick={() => setFiltersOpen((o) => !o)}
+            title="Filters"
+            aria-label="Filters"
+            aria-expanded={filtersOpen}
+          >
+            <FilterIcon size={14} />
+            {activeFilters > 0 && <span className="filter-badge">{activeFilters}</span>}
+          </button>
+          {tab === 'review' && list.length > 0 && (
+            confirmAll ? (
+              <span className="confirm-inline">
+                Review all {list.length}?
+                <button className="link-btn" onClick={() => { onReviewAll(list); setConfirmAll(false); }}>Yes</button>
+                <button className="link-btn muted" onClick={() => setConfirmAll(false)}>No</button>
+              </span>
+            ) : (
+              <button className="link-btn" onClick={() => setConfirmAll(true)}>Review all</button>
+            )
+          )}
+        </div>
+      )}
 
-      <div className="card-list">
+      {filtersOpen && !selecting && (
+        <div className="queue-tools">
+          <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter comments">
+            {FILTERS.map((f) => (
+              <option key={f.id} value={f.id}>{f.label}</option>
+            ))}
+          </select>
+          <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} aria-label="Filter by date">
+            {DATES.map((d) => (
+              <option key={d.id} value={d.id}>{d.label}</option>
+            ))}
+          </select>
+          {ads.length > 1 && (
+            <select value={adFilter} onChange={(e) => setAdFilter(e.target.value)} aria-label="Filter by ad" className="ad-filter-select">
+              <option value="all">All ads</option>
+              {ads.map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          )}
+          {activeFilters > 0 && (
+            <button className="link-btn muted" onClick={resetFilters}>Reset</button>
+          )}
+        </div>
+      )}
+
+      <div className={`card-list ${selecting ? 'selecting' : ''}`}>
         {loading && comments.length === 0 && (
           <div className="queue-empty"><span className="loader" /> Loading comments…</div>
         )}
@@ -221,26 +291,23 @@ export default function Queue({
               sweeping.has(c.id) ? 'sweep-out' : '',
               pulsing?.has(c.id) ? 'pulse' : '',
               c.is_hidden ? 'is-hidden' : '',
-              selectMode && checked.has(c.id) ? 'checked' : '',
+              checked.has(c.id) ? 'checked' : '',
             ].join(' ')}
-            onClick={() => (selectMode ? toggleChecked(c.id) : onSelect(c.id))}
+            onClick={() => (selecting ? toggleChecked(c.id) : onSelect(c.id))}
           >
             <div className="card-top">
-              {selectMode && (
-                <input
-                  type="checkbox"
-                  className="card-check"
-                  checked={checked.has(c.id)}
-                  onChange={() => toggleChecked(c.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label="Select comment"
-                />
-              )}
-              {c.from?.picture?.data?.url ? (
-                <img className="avatar sm" src={c.from.picture.data.url} alt="" />
-              ) : (
-                <div className="avatar sm avatar-fallback">{(c.from?.name || 'F')[0]}</div>
-              )}
+              <span
+                className="card-avatar"
+                title={checked.has(c.id) ? 'Deselect' : 'Select for bulk actions'}
+                onClick={(e) => { e.stopPropagation(); toggleChecked(c.id); }}
+              >
+                {c.from?.picture?.data?.url ? (
+                  <img className="avatar sm" src={c.from.picture.data.url} alt="" />
+                ) : (
+                  <div className="avatar sm avatar-fallback">{(c.from?.name || 'F')[0]}</div>
+                )}
+                <span className="card-check" aria-hidden="true"><CheckIcon size={12} /></span>
+              </span>
               <span className="card-author">{c.from?.name || 'Facebook user'}</span>
               <span className="card-time">{timeAgo(c.created_time)}</span>
             </div>
@@ -267,7 +334,7 @@ export default function Queue({
                   </span>
                 )}
               </span>
-              {!selectMode && (
+              {!selecting && (
                 <span className="card-actions" onClick={(e) => e.stopPropagation()}>
                   {confirmDeleteId === c.id ? (
                     <span className="confirm-inline">
@@ -316,43 +383,6 @@ export default function Queue({
           </article>
         ))}
       </div>
-
-      {selectMode && (
-        <div className="bulk-bar">
-          <label className="bulk-all">
-            <input
-              type="checkbox"
-              checked={allVisibleChecked}
-              onChange={() =>
-                setChecked(allVisibleChecked ? new Set() : new Set(list.map((c) => c.id)))
-              }
-              aria-label="Select all visible"
-            />
-            <strong>{checked.size}</strong> selected
-          </label>
-          <span className="queue-tools-spacer" />
-          {confirmBulkDelete ? (
-            <span className="confirm-inline">
-              Delete {checked.size}?
-              <button className="link-btn danger-link" onClick={() => bulk('delete')}>Yes</button>
-              <button className="link-btn muted" onClick={() => setConfirmBulkDelete(false)}>No</button>
-            </span>
-          ) : (
-            <>
-              <button className="bulk-btn" disabled={!checked.size} onClick={() => bulk('review')}>
-                <CheckIcon size={13} /> Review
-              </button>
-              <button className="bulk-btn" disabled={!checked.size} onClick={() => bulk('hide')}>
-                <EyeOffIcon size={13} /> Hide
-              </button>
-              <button className="bulk-btn danger" disabled={!checked.size} onClick={() => setConfirmBulkDelete(true)}>
-                <TrashIcon size={13} /> Delete
-              </button>
-            </>
-          )}
-          <button className="link-btn muted" onClick={exitSelect}>Cancel</button>
-        </div>
-      )}
     </section>
   );
 }

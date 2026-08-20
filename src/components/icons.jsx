@@ -39,3 +39,4 @@ export const ShieldIcon = (p) => <I {...p}><path d="M12 22s8-3.6 8-10V5l-8-3-8 3
 export const ClockIcon = (p) => <I {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></I>;
 export const BookmarkIcon = (p) => <I {...p}><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z" /></I>;
 export const SquareCheckIcon = (p) => <I {...p}><rect x="3" y="3" width="18" height="18" rx="3" /><path d="m8.5 12 2.5 2.5L16 9" /></I>;
+export const FilterIcon = (p) => <I {...p}><path d="M4 5h16l-6.5 7.5V19l-3 2v-8.5Z" /></I>;
