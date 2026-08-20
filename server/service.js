@@ -139,19 +139,13 @@ export const service = {
   },
 
   async aiDraft(commentId, pageId) {
-    const [cached, state, adIndex] = await Promise.all([
+    const [cached, state] = await Promise.all([
       kvGet('cache', `comments/${pageId}`),
       loadState(),
-      kvGet('cache', 'adIndex'),
     ]);
     const comment = cached?.comments?.find((c) => c.id === commentId);
     if (!comment) throw new GraphError({ message: 'Comment not found — refresh and try again' }, 404);
-    const pageName = adIndex?.pages?.find((p) => p.id === pageId)?.name || 'our page';
-    const draft = await draftReply({
-      comment,
-      pageName,
-      instructions: state.settings.aiPrompt || '',
-    });
+    const draft = await draftReply({ comment, instructions: state.settings.aiPrompt || '' });
     return { draft };
   },
 
