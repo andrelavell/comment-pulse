@@ -265,8 +265,15 @@ export const service = {
         await kvSet('cache', `comments/${page.id}`, { at: Date.now(), comments });
         queueIds[page.id] = {
           total: comments.length,
-          // hidden comments count as handled, so they never inflate the queue
-          ids: comments.filter((c) => c.from?.id !== page.id && !c.is_hidden).map((c) => c.id),
+          // hidden or page-replied comments count as handled: never in the queue
+          ids: comments
+            .filter(
+              (c) =>
+                c.from?.id !== page.id &&
+                !c.is_hidden &&
+                !c.replies?.some((r) => r.from?.id === page.id)
+            )
+            .map((c) => c.id),
         };
       } catch (e) {
         console.warn(`Sweep failed for ${page.name}: ${e.message}`);

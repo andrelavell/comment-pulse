@@ -103,7 +103,9 @@ export default function App() {
     try {
       const { comments } = await api.comments(pid, force);
       setComments(comments);
-      const toReview = comments.filter((c) => !c.reviewed && !c.autoHidden && !c.is_hidden).length;
+      const toReview = comments.filter(
+        (c) => !c.reviewed && !c.autoHidden && !c.is_hidden && !c.replies?.some((r) => r.isPageAuthor)
+      ).length;
       queueTotal.current = Math.max(toReview, queueTotal.current && !force ? queueTotal.current : toReview);
       setCounts((c) => ({ ...c, [pid]: { total: comments.length, toReview } }));
     } catch (e) {
@@ -146,7 +148,9 @@ export default function App() {
       ...c,
       [pageId]: {
         total: list.length,
-        toReview: list.filter((x) => !x.reviewed && !x.autoHidden && !x.is_hidden).length,
+        toReview: list.filter(
+          (x) => !x.reviewed && !x.autoHidden && !x.is_hidden && !x.replies?.some((r) => r.isPageAuthor)
+        ).length,
       },
     }));
 

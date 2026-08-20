@@ -19,12 +19,14 @@ export default function Queue({
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
-  // Hidden comments count as handled: they never sit in the To review queue.
-  const toReview = comments.filter((c) => !c.reviewed && !c.autoHidden && !c.is_hidden);
+  // Hidden or page-replied comments count as handled: never in the queue.
+  const handled = (c) =>
+    c.reviewed || c.is_hidden || c.replies?.some((r) => r.isPageAuthor);
+  const toReview = comments.filter((c) => !handled(c) && !c.autoHidden);
   const autoHidden = comments.filter((c) => c.autoHidden);
   const list = {
     review: toReview,
-    reviewed: comments.filter((c) => (c.reviewed || c.is_hidden) && !c.autoHidden),
+    reviewed: comments.filter((c) => handled(c) && !c.autoHidden),
     autohidden: autoHidden,
     all: comments,
   }[tab].filter((c) => {
@@ -54,7 +56,7 @@ export default function Queue({
       <div className="tabs" role="tablist">
         {[
           ['review', 'To review', toReview.length],
-          ['reviewed', 'Reviewed', comments.filter((c) => (c.reviewed || c.is_hidden) && !c.autoHidden).length],
+          ['reviewed', 'Reviewed', comments.filter((c) => handled(c) && !c.autoHidden).length],
           ['autohidden', 'Auto-hidden', autoHidden.length],
           ['all', 'All', comments.length],
         ].map(([id, label, n]) => (
