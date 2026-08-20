@@ -322,7 +322,21 @@ export default function App() {
         onQuickAction={handleAction}
         onOpenSettings={() => setSettingsOpen(true)}
       />
-      <Detail comment={selected} page={page} onAction={handleAction} />
+      <Detail
+        comment={selected}
+        page={page}
+        onAction={handleAction}
+        onAiDraft={async (comment) => {
+          try {
+            const { draft } = await api.aiDraft(comment.id, pageId);
+            return draft;
+          } catch (e) {
+            if (e.authRequired) setNeedsLogin(true);
+            else toast(e.message, 'error');
+            return null;
+          }
+        }}
+      />
 
       {settingsOpen && settings && (
         <Settings settings={settings} onSave={saveSettings} onClose={() => setSettingsOpen(false)} />

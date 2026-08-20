@@ -22,6 +22,8 @@ export const api = {
   review: (commentIds, reviewed) => req('/api/review', { method: 'POST', body: { commentIds, reviewed } }),
   reply: (commentId, pageId, message) =>
     req(`/api/comments/${commentId}/reply`, { method: 'POST', body: { pageId, message } }),
+  aiDraft: (commentId, pageId) =>
+    req(`/api/comments/${commentId}/ai-draft`, { method: 'POST', body: { pageId } }),
   hide: (commentId, pageId, hidden) =>
     req(`/api/comments/${commentId}/hide`, { method: 'POST', body: { pageId, hidden } }),
   remove: (commentId, pageId) =>

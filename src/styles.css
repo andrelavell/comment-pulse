@@ -608,10 +608,12 @@ a { color: var(--ember); text-decoration: none; }
 .composer-foot {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 12px;
   padding: 6px 10px 10px;
 }
+.composer-spacer { flex: 1; }
+.ai-btn svg { color: var(--ember); }
+.ai-btn svg.spin { animation: spin 0.9s linear infinite; }
 
 /* ---------- settings modal ---------- */
 .modal-backdrop {

@@ -5,6 +5,7 @@ export default function Settings({ settings, onSave, onClose }) {
   const [autoHide, setAutoHide] = useState(settings.autoHide);
   const [text, setText] = useState(settings.keywords.join('\n'));
   const [enabledPages, setEnabledPages] = useState(settings.enabledPages || []);
+  const [aiPrompt, setAiPrompt] = useState(settings.aiPrompt || '');
 
   const keywords = text.split('\n').map((k) => k.trim()).filter(Boolean);
   const allPages = settings.allPages || [];
@@ -77,13 +78,31 @@ export default function Settings({ settings, onSave, onClose }) {
           spellCheck={false}
         />
 
+        <label className="field-label" htmlFor="aiprompt">
+          AI reply instructions
+          <small>
+            Business context GPT gets with every "Respond with AI" draft — what you
+            sell, your policies, tone, what to never promise. It also sees the
+            comment, the ad post, and every reply you've sent in the last 30 days.
+          </small>
+        </label>
+        <textarea
+          id="aiprompt"
+          className="keywords-input"
+          value={aiPrompt}
+          onChange={(e) => setAiPrompt(e.target.value)}
+          rows={6}
+          placeholder={'Example:\nWe sell OTC hearing aids ($249, 45-day returns, free US shipping).\nTone: warm, helpful, concise. For support issues point to support@ourbrand.com.\nNever promise discounts or medical outcomes.'}
+          spellCheck={false}
+        />
+
         <footer className="modal-foot">
           <button className="pill-btn ghost" onClick={onClose}>Cancel</button>
           <button
             className="pill-btn primary"
             disabled={enabledPages.length === 0}
             title={enabledPages.length === 0 ? 'Select at least one page' : undefined}
-            onClick={() => onSave({ autoHide, keywords, enabledPages })}
+            onClick={() => onSave({ autoHide, keywords, enabledPages, aiPrompt })}
           >
             Save settings
           </button>

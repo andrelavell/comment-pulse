@@ -42,6 +42,9 @@ app.post('/api/review', wrap(async (req, res) =>
 app.post('/api/comments/:id/reply', wrap(async (req, res) =>
   res.json(await service.reply(req.params.id, req.body.pageId, req.body.message))));
 
+app.post('/api/comments/:id/ai-draft', wrap(async (req, res) =>
+  res.json(await service.aiDraft(req.params.id, req.body.pageId))));
+
 app.post('/api/comments/:id/hide', wrap(async (req, res) =>
   res.json(await service.hide(req.params.id, req.body.pageId, req.body.hidden))));
 

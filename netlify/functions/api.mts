@@ -60,6 +60,9 @@ export default async (req: Request, _context: Context) => {
     if ((m = path.match(/^\/comments\/([^/]+)\/reply$/)) && method === "POST") {
       return json(await service.reply(m[1], body.pageId, body.message));
     }
+    if ((m = path.match(/^\/comments\/([^/]+)\/ai-draft$/)) && method === "POST") {
+      return json(await service.aiDraft(m[1], body.pageId));
+    }
     if ((m = path.match(/^\/comments\/([^/]+)\/hide$/)) && method === "POST") {
       return json(await service.hide(m[1], body.pageId, body.hidden));
     }

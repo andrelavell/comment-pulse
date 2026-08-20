@@ -15,7 +15,7 @@ const EMPTY = () => ({
   reviewed: {},
   banned: {},
   autoHidden: {},
-  settings: { autoHide: true, keywords: DEFAULT_KEYWORDS, enabledPages: DEFAULT_PAGES },
+  settings: { autoHide: true, keywords: DEFAULT_KEYWORDS, enabledPages: DEFAULT_PAGES, aiPrompt: '' },
 });
 
 export async function loadState() {
@@ -39,5 +39,6 @@ export function normalizeSettings(settings) {
       .map((k) => String(k).trim().toLowerCase())
       .filter(Boolean),
     enabledPages: [...new Set((settings.enabledPages || []).map(String).filter(Boolean))],
+    aiPrompt: String(settings.aiPrompt || '').slice(0, 8000),
   };
 }

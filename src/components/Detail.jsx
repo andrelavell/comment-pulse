@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fullTime } from '../api.js';
 import {
-  CheckIcon, ReplyIcon, EyeIcon, EyeOffIcon, TrashIcon, BanIcon, ThumbIcon, ExternalIcon,
+  CheckIcon, ReplyIcon, EyeIcon, EyeOffIcon, TrashIcon, BanIcon, ThumbIcon, ExternalIcon, SparkIcon,
 } from './icons.jsx';
 
 const MAX_LEN = 2000;
@@ -14,15 +14,27 @@ function Avatar({ from, size = '' }) {
   );
 }
 
-export default function Detail({ comment, page, onAction }) {
+export default function Detail({ comment, page, onAction, onAiDraft }) {
   const [reply, setReply] = useState('');
   const [confirm, setConfirm] = useState(null); // 'delete' | 'ban' | null
+  const [drafting, setDrafting] = useState(false);
   const replyRef = useRef(null);
 
   useEffect(() => {
     setReply('');
     setConfirm(null);
+    setDrafting(false);
   }, [comment?.id]);
+
+  const draftWithAi = async () => {
+    setDrafting(true);
+    const text = await onAiDraft(comment);
+    setDrafting(false);
+    if (text) {
+      setReply(text);
+      replyRef.current?.focus();
+    }
+  };
 
   if (!comment) {
     return (
@@ -188,6 +200,16 @@ export default function Detail({ comment, page, onAction }) {
           }}
         />
         <div className="composer-foot">
+          <button
+            className="pill-btn ghost ai-btn"
+            disabled={drafting || !comment.can_comment}
+            onClick={draftWithAi}
+            title="Draft a reply with AI — you can edit it before sending"
+          >
+            <SparkIcon size={14} className={drafting ? 'spin' : ''} />
+            {drafting ? 'Drafting…' : 'Respond with AI'}
+          </button>
+          <span className="composer-spacer" />
           <span className="mono">{MAX_LEN - reply.length}</span>
           <button
             className="pill-btn primary"

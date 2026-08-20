@@ -2,6 +2,7 @@
 import { buildAdIndex, fetchPageComments, actions, GraphError } from './graph.js';
 import { kvGet, kvSet } from './storage.js';
 import { loadState, saveState, normalizeSettings } from './store.js';
+import { logReply, draftReply } from './ai.js';
 
 const AD_INDEX_TTL = 30 * 60 * 1000;
 
@@ -119,14 +120,39 @@ export const service = {
   async reply(commentId, pageId, message) {
     const out = await actions.reply(commentId, pageId, message);
     await this.review([commentId], true);
+    let original = null;
     await this.updateCachedComments(pageId, (cs) =>
-      cs.map((c) =>
-        c.id === commentId
-          ? { ...c, replies: [...(c.replies || []), { id: out.id, message, from: { id: pageId }, pageId }] }
-          : c
-      )
+      cs.map((c) => {
+        if (c.id !== commentId) return c;
+        original = c;
+        return { ...c, replies: [...(c.replies || []), { id: out.id, message, from: { id: pageId }, pageId }] };
+      })
     );
+    await logReply({
+      at: Date.now(),
+      pageId,
+      commentId,
+      comment: original?.message || '',
+      reply: message,
+    });
     return { ok: true, id: out.id };
+  },
+
+  async aiDraft(commentId, pageId) {
+    const [cached, state, adIndex] = await Promise.all([
+      kvGet('cache', `comments/${pageId}`),
+      loadState(),
+      kvGet('cache', 'adIndex'),
+    ]);
+    const comment = cached?.comments?.find((c) => c.id === commentId);
+    if (!comment) throw new GraphError({ message: 'Comment not found — refresh and try again' }, 404);
+    const pageName = adIndex?.pages?.find((p) => p.id === pageId)?.name || 'our page';
+    const draft = await draftReply({
+      comment,
+      pageName,
+      instructions: state.settings.aiPrompt || '',
+    });
+    return { draft };
   },
 
   async hide(commentId, pageId, hidden) {
