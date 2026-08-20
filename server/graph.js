@@ -1,12 +1,6 @@
+import { env } from './storage.js';
+
 const GRAPH = 'https://graph.facebook.com/v21.0';
-
-const USER_TOKEN = process.env.META_USER_TOKEN;
-if (!USER_TOKEN) {
-  console.error('Missing META_USER_TOKEN in .env');
-  process.exit(1);
-}
-
-const pageTokens = new Map(); // pageId -> page access token (server-side only)
 
 export class GraphError extends Error {
   constructor(fbError, status) {
@@ -16,7 +10,13 @@ export class GraphError extends Error {
   }
 }
 
-export async function g(path, params = {}, token = USER_TOKEN, method = 'GET') {
+function userToken() {
+  const t = env('META_USER_TOKEN');
+  if (!t) throw new GraphError({ message: 'Missing META_USER_TOKEN' }, 500);
+  return t;
+}
+
+export async function g(path, params = {}, token = userToken(), method = 'GET') {
   const url = new URL(`${GRAPH}/${path}`);
   const body = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -45,69 +45,35 @@ async function gAll(path, params, token, maxPages = 10) {
   return out;
 }
 
-// ---------- Pages ----------
-let pagesCache = null;
-export async function getPages(force = false) {
-  if (pagesCache && !force) return pagesCache;
-  const data = await gAll('me/accounts', {
-    fields: 'id,name,access_token,category,picture{url}',
-    limit: 100,
-  });
-  for (const p of data) pageTokens.set(p.id, p.access_token);
-  pagesCache = data.map(({ access_token, ...rest }) => rest);
-  return pagesCache;
+// ---------- Page tokens (per-instance cache, re-fetched on demand) ----------
+const pageTokens = new Map();
+
+export async function pageToken(pageId) {
+  if (pageTokens.has(pageId)) return pageTokens.get(pageId);
+  const p = await g(pageId, { fields: 'access_token' });
+  if (!p.access_token) throw new GraphError({ message: `No admin access to page ${pageId}` }, 403);
+  pageTokens.set(pageId, p.access_token);
+  return p.access_token;
 }
 
-export function pageToken(pageId) {
-  const t = pageTokens.get(pageId);
-  if (!t) throw new GraphError({ message: `No page token for ${pageId}. Reload pages.` }, 400);
-  return t;
-}
-
-// Some pages (business-owned) don't show up in /me/accounts but are still
-// accessible directly by id. Resolve their metadata + token individually.
-const pageMeta = new Map();
 export async function resolvePage(pageId) {
-  if (pageMeta.has(pageId)) return pageMeta.get(pageId);
   try {
     const p = await g(pageId, { fields: 'id,name,category,picture{url},access_token' });
-    if (p.access_token) pageTokens.set(pageId, p.access_token);
+    if (!p.access_token) return null;
+    pageTokens.set(pageId, p.access_token);
     const { access_token, ...rest } = p;
-    pageMeta.set(pageId, access_token ? rest : null);
-    return access_token ? rest : null;
+    return rest;
   } catch {
-    pageMeta.set(pageId, null);
     return null;
   }
 }
 
-export async function resolvePages(pageIds) {
-  const out = [];
-  for (const batch of Array.from({ length: Math.ceil(pageIds.length / 5) }, (_, i) =>
-    pageIds.slice(i * 5, i * 5 + 5)
-  )) {
-    const results = await Promise.all(batch.map(resolvePage));
-    out.push(...results.filter(Boolean));
-  }
-  return out;
-}
+// ---------- Ad post index: { pages: [...], index: { pageId: { storyId: meta } } } ----------
+export async function buildAdIndex() {
+  const accounts = await gAll('me/adaccounts', { fields: 'id,name,account_status', limit: 100 });
+  const index = {};
+  const queue = accounts.filter((a) => a.account_status === 1);
 
-// ---------- Ad post index: pageId -> Map(storyId -> meta) ----------
-let adIndex = null;
-let adIndexBuiltAt = 0;
-let adIndexPromise = null;
-const AD_INDEX_TTL = 10 * 60 * 1000;
-
-async function buildAdIndex() {
-  const accounts = await gAll('me/adaccounts', {
-    fields: 'id,name,account_status',
-    limit: 100,
-  });
-  const index = new Map();
-  const active = accounts.filter((a) => a.account_status === 1);
-
-  const CONCURRENCY = 4;
-  const queue = [...active];
   async function worker() {
     while (queue.length) {
       const acct = queue.shift();
@@ -118,7 +84,7 @@ async function buildAdIndex() {
             fields: 'id,name,effective_status,updated_time,creative{effective_object_story_id}',
             limit: 250,
           },
-          USER_TOKEN,
+          userToken(),
           4
         );
         for (const ad of ads) {
@@ -126,12 +92,9 @@ async function buildAdIndex() {
           if (!story || !story.includes('_')) continue;
           if (['DELETED', 'ARCHIVED', 'DISAPPROVED'].includes(ad.effective_status)) continue;
           const pageId = story.split('_')[0];
-          if (!index.has(pageId)) index.set(pageId, new Map());
-          const posts = index.get(pageId);
-          if (!posts.has(story)) {
-            posts.set(story, { storyId: story, ads: [], active: false, lastUpdated: '' });
-          }
-          const entry = posts.get(story);
+          index[pageId] ??= {};
+          index[pageId][story] ??= { storyId: story, ads: [], active: false, lastUpdated: '' };
+          const entry = index[pageId][story];
           entry.ads.push({ id: ad.id, name: ad.name, status: ad.effective_status, account: acct.name });
           if (ad.effective_status === 'ACTIVE') entry.active = true;
           if ((ad.updated_time || '') > entry.lastUpdated) entry.lastUpdated = ad.updated_time || '';
@@ -141,30 +104,23 @@ async function buildAdIndex() {
       }
     }
   }
-  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-  adIndex = index;
-  adIndexBuiltAt = Date.now();
-  return index;
-}
+  await Promise.all(Array.from({ length: 4 }, worker));
 
-export async function getAdIndex(force = false) {
-  if (adIndex && !force && Date.now() - adIndexBuiltAt < AD_INDEX_TTL) return adIndex;
-  if (!adIndexPromise) {
-    adIndexPromise = buildAdIndex().finally(() => (adIndexPromise = null));
+  const pages = [];
+  for (const pageId of Object.keys(index)) {
+    const p = await resolvePage(pageId);
+    if (p) pages.push({ ...p, adPosts: Object.keys(index[pageId]).length });
   }
-  return adIndexPromise;
+  pages.sort((a, b) => b.adPosts - a.adPosts);
+  return { pages, index, builtAt: Date.now() };
 }
 
 // ---------- Post meta (ad creative context) ----------
 const postMeta = new Map();
-export async function getPostMeta(storyId, pageId) {
+async function getPostMeta(storyId, token) {
   if (postMeta.has(storyId)) return postMeta.get(storyId);
   try {
-    const meta = await g(
-      storyId,
-      { fields: 'message,full_picture,permalink_url,created_time' },
-      pageToken(pageId)
-    );
+    const meta = await g(storyId, { fields: 'message,full_picture,permalink_url,created_time' }, token);
     postMeta.set(storyId, meta);
     return meta;
   } catch {
@@ -178,28 +134,20 @@ export async function getPostMeta(storyId, pageId) {
 const COMMENT_FIELDS =
   'id,message,created_time,from{id,name,picture{url}},is_hidden,like_count,comment_count,can_hide,can_remove,can_like,can_comment,permalink_url,attachment,user_likes';
 
-const commentCache = new Map(); // pageId -> { at, comments }
-const COMMENT_TTL = 60 * 1000;
-
-export async function getPageComments(pageId, { force = false, maxPosts = 40 } = {}) {
-  const cached = commentCache.get(pageId);
-  if (cached && !force && Date.now() - cached.at < COMMENT_TTL) return cached.comments;
-
-  const index = await getAdIndex();
-  const posts = [...(index.get(pageId)?.values() || [])]
+export async function fetchPageComments(pageId, postsById, { maxPosts = 40 } = {}) {
+  const posts = Object.values(postsById || {})
     .sort((a, b) => (b.active - a.active) || b.lastUpdated.localeCompare(a.lastUpdated))
     .slice(0, maxPosts);
 
-  const token = pageToken(pageId);
+  const token = await pageToken(pageId);
   const all = [];
-  const CONCURRENCY = 5;
   const queue = [...posts];
   async function worker() {
     while (queue.length) {
       const post = queue.shift();
       try {
         const [meta, comments] = await Promise.all([
-          getPostMeta(post.storyId, pageId),
+          getPostMeta(post.storyId, token),
           gAll(
             `${post.storyId}/comments`,
             {
@@ -232,32 +180,21 @@ export async function getPageComments(pageId, { force = false, maxPosts = 40 } =
       }
     }
   }
-  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  await Promise.all(Array.from({ length: 5 }, worker));
   all.sort((a, b) => b.created_time.localeCompare(a.created_time));
   for (const c of all) delete c.comments;
-  commentCache.set(pageId, { at: Date.now(), comments: all });
   return all;
 }
 
-export function invalidateComments(pageId) {
-  commentCache.delete(pageId);
-}
-
-export function cachedCounts() {
-  const out = {};
-  for (const [pageId, { comments }] of commentCache) out[pageId] = comments;
-  return out;
-}
-
-// ---------- Actions (all with page tokens) ----------
+// ---------- Actions (all executed as the page) ----------
 export const actions = {
-  reply: (commentId, pageId, message) =>
-    g(`${commentId}/comments`, { message }, pageToken(pageId), 'POST'),
-  setHidden: (commentId, pageId, hidden) =>
-    g(commentId, { is_hidden: hidden ? 'true' : 'false' }, pageToken(pageId), 'POST'),
-  remove: (commentId, pageId) => g(commentId, {}, pageToken(pageId), 'DELETE'),
-  like: (commentId, pageId) => g(`${commentId}/likes`, {}, pageToken(pageId), 'POST'),
-  unlike: (commentId, pageId) => g(`${commentId}/likes`, {}, pageToken(pageId), 'DELETE'),
-  ban: (pageId, userId) => g(`${pageId}/blocked`, { user: userId }, pageToken(pageId), 'POST'),
-  unban: (pageId, userId) => g(`${pageId}/blocked`, { user: userId }, pageToken(pageId), 'DELETE'),
+  reply: async (commentId, pageId, message) =>
+    g(`${commentId}/comments`, { message }, await pageToken(pageId), 'POST'),
+  setHidden: async (commentId, pageId, hidden) =>
+    g(commentId, { is_hidden: hidden ? 'true' : 'false' }, await pageToken(pageId), 'POST'),
+  remove: async (commentId, pageId) => g(commentId, {}, await pageToken(pageId), 'DELETE'),
+  like: async (commentId, pageId) => g(`${commentId}/likes`, {}, await pageToken(pageId), 'POST'),
+  unlike: async (commentId, pageId) => g(`${commentId}/likes`, {}, await pageToken(pageId), 'DELETE'),
+  ban: async (pageId, userId) => g(`${pageId}/blocked`, { user: userId }, await pageToken(pageId), 'POST'),
+  unban: async (pageId, userId) => g(`${pageId}/blocked`, { user: userId }, await pageToken(pageId), 'DELETE'),
 };

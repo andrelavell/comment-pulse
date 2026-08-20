@@ -5,11 +5,17 @@ async function req(path, opts = {}) {
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error || `Request failed (${res.status})`);
+  if (!res.ok) {
+    const err = new Error(json.error || `Request failed (${res.status})`);
+    err.status = res.status;
+    err.authRequired = Boolean(json.authRequired);
+    throw err;
+  }
   return json;
 }
 
 export const api = {
+  login: (password) => req('/api/login', { method: 'POST', body: { password } }),
   bootstrap: (force) => req(`/api/bootstrap${force ? '?force=1' : ''}`),
   comments: (pageId, force) => req(`/api/comments?pageId=${pageId}${force ? '&force=1' : ''}`),
   overview: () => req('/api/overview'),

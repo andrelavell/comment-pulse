@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar.jsx';
 import Queue from './components/Queue.jsx';
 import Detail from './components/Detail.jsx';
 import Settings from './components/Settings.jsx';
+import Login from './components/Login.jsx';
 
 let toastId = 0;
 
@@ -25,6 +26,8 @@ export default function App() {
   const [sweeping, setSweeping] = useState(new Set());
   const [settings, setSettings] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [needsLogin, setNeedsLogin] = useState(false);
+  const [building, setBuilding] = useState(false);
   const queueTotal = useRef(0);
 
   const toast = useCallback((text, kind = 'info') => {
@@ -43,12 +46,24 @@ export default function App() {
   const boot = useCallback(async (force = false) => {
     setReloading(true);
     try {
-      const { pages } = await api.bootstrap(force);
-      setPages(pages);
+      const res = await api.bootstrap(force);
+      if (res.building) {
+        // First-ever load: the server is syncing pages and ads in the
+        // background. Poll until the index is ready.
+        setBuilding(true);
+        setBooting(false);
+        setReloading(false);
+        setTimeout(() => boot(), 8000);
+        return;
+      }
+      setBuilding(false);
+      setPages(res.pages);
       setBootError(null);
-      if (pages.length && !pageId) setPageId(pages[0].id);
+      setNeedsLogin(false);
+      if (res.pages.length && !pageId) setPageId(res.pages[0].id);
     } catch (e) {
-      setBootError(e.message);
+      if (e.authRequired) setNeedsLogin(true);
+      else setBootError(e.message);
     } finally {
       setBooting(false);
       setReloading(false);
@@ -59,6 +74,13 @@ export default function App() {
     boot();
     api.settings().then(setSettings).catch(() => {});
   }, []); // eslint-disable-line
+
+  const onLogin = () => {
+    setNeedsLogin(false);
+    setBooting(true);
+    boot();
+    api.settings().then(setSettings).catch(() => {});
+  };
 
   const saveSettings = async (next) => {
     try {
@@ -76,11 +98,12 @@ export default function App() {
     try {
       const { comments } = await api.comments(pid, force);
       setComments(comments);
-      const toReview = comments.filter((c) => !c.reviewed).length;
+      const toReview = comments.filter((c) => !c.reviewed && !c.autoHidden).length;
       queueTotal.current = Math.max(toReview, queueTotal.current && !force ? queueTotal.current : toReview);
       setCounts((c) => ({ ...c, [pid]: { total: comments.length, toReview } }));
     } catch (e) {
-      toast(e.message, 'error');
+      if (e.authRequired) setNeedsLogin(true);
+      else toast(e.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -220,13 +243,16 @@ export default function App() {
           break;
       }
     } catch (e) {
-      toast(e.message, 'error');
+      if (e.authRequired) setNeedsLogin(true);
+      else toast(e.message, 'error');
     } finally {
       setBusy(false);
     }
   };
 
-  if (booting) {
+  if (needsLogin) return <Login onSuccess={onLogin} />;
+
+  if (booting || building) {
     return (
       <div className="boot">
         <span className="loader lg" />

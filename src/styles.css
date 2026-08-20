@@ -67,6 +67,20 @@ a { color: var(--ember); text-decoration: none; }
 .boot strong { font-family: var(--display); font-size: 20px; }
 .boot p { color: var(--ink-soft); max-width: 340px; margin: 0; }
 
+.login-mark { width: 48px; height: 48px; border-radius: 14px; margin-bottom: 4px; }
+.login-form { display: flex; gap: 8px; margin-top: 8px; }
+.login-form input {
+  font: inherit;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  outline: none;
+  width: 220px;
+  background: var(--card);
+}
+.login-form input:focus { border-color: var(--ember); }
+.login-error { color: var(--danger); font-size: 13px; font-weight: 500; }
+
 .loader {
   width: 16px; height: 16px;
   border: 2px solid var(--line);
