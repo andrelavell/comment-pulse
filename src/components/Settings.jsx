@@ -210,8 +210,11 @@ export default function Settings({ settings, onSave, onClose }) {
                     <div key={f.id} className="feedback-item">
                       <div className="feedback-item-body">
                         <strong>{f.feedback}</strong>
+                        {f.comment && (
+                          <span className="feedback-item-quote">comment: “{f.comment.slice(0, 120)}{f.comment.length > 120 ? '…' : ''}”</span>
+                        )}
                         {f.highlight && (
-                          <span className="feedback-item-quote">re: “{f.highlight.slice(0, 120)}{f.highlight.length > 120 ? '…' : ''}”</span>
+                          <span className="feedback-item-quote">draft said: “{f.highlight.slice(0, 120)}{f.highlight.length > 120 ? '…' : ''}”</span>
                         )}
                         <span className="mono">{new Date(f.at).toLocaleDateString()}</span>
                       </div>

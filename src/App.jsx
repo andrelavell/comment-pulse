@@ -364,9 +364,9 @@ export default function App() {
             return null;
           }
         }}
-        onFeedback={async (highlight, feedback) => {
+        onFeedback={async (highlight, feedback, commentText) => {
           try {
-            await api.addFeedback(highlight, feedback);
+            await api.addFeedback(highlight, feedback, commentText);
             toast('Feedback saved — every future AI draft will follow it');
           } catch (e) {
             if (e.authRequired) setNeedsLogin(true);

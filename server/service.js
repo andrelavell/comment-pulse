@@ -215,9 +215,9 @@ export const service = {
     return { feedback: await listFeedback() };
   },
 
-  async addFeedback(highlight, feedback) {
+  async addFeedback(highlight, feedback, comment) {
     if (!feedback?.trim()) throw new GraphError({ message: 'Feedback text is required' }, 400);
-    return { entry: await addFeedback({ highlight, feedback: feedback.trim() }) };
+    return { entry: await addFeedback({ highlight, feedback: feedback.trim(), comment }) };
   },
 
   async deleteFeedback(id) {

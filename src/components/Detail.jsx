@@ -42,7 +42,7 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
 
   const saveFeedback = async () => {
     if (!fbText.trim()) return;
-    await onFeedback(sel, fbText.trim());
+    await onFeedback(sel, fbText.trim(), comment.message || '');
     setSel('');
     setFbOpen(false);
     setFbText('');
