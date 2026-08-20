@@ -659,6 +659,35 @@ a { color: var(--ember); text-decoration: none; }
 }
 .field-label small { font-weight: 400; color: var(--ink-faint); width: 100%; }
 
+.page-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 6px;
+}
+.page-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.page-pick:hover { background: var(--paper); }
+.page-pick input { accent-color: var(--ember); }
+.page-pick-name {
+  flex: 1;
+  font-weight: 500;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .keywords-input {
   font-family: var(--mono);
   font-size: 12.5px;

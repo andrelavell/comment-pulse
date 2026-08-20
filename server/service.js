@@ -59,13 +59,14 @@ async function getAdIndexCached(force = false) {
 }
 
 export const service = {
-  // Returns { pages } or { building: true } when no index exists yet.
+  // Returns { pages } (enabled pages only) or { building: true } when no index exists yet.
   async bootstrap({ force = false, allowBuild = true } = {}) {
     let cached = await kvGet('cache', 'adIndex');
     const stale = !cached || Date.now() - cached.builtAt > AD_INDEX_TTL;
     if ((force || stale) && allowBuild) cached = await getAdIndexCached(force);
     if (!cached) return { building: true };
-    return { pages: cached.pages };
+    const { settings } = await loadState();
+    return { pages: cached.pages.filter((p) => settings.enabledPages.includes(p.id)) };
   },
 
   async comments(pageId, { force = false } = {}) {
@@ -163,12 +164,18 @@ export const service = {
   },
 
   async getSettings() {
-    return (await loadState()).settings;
+    const [state, adIndex] = await Promise.all([loadState(), kvGet('cache', 'adIndex')]);
+    return {
+      ...state.settings,
+      allPages: (adIndex?.pages || []).map(({ id, name, picture, adPosts }) => ({
+        id, name, picture, adPosts,
+      })),
+    };
   },
 
   async saveSettings(settings) {
     const state = await loadState();
-    state.settings = normalizeSettings(settings);
+    state.settings = normalizeSettings({ ...state.settings, ...settings });
     await saveState(state);
     return state.settings;
   },
@@ -181,7 +188,8 @@ export const service = {
     const state = await loadState();
     const queueIds = {};
     let hidden = 0;
-    for (const page of adIndex.pages) {
+    const pages = adIndex.pages.filter((p) => state.settings.enabledPages.includes(p.id));
+    for (const page of pages) {
       try {
         const comments = await fetchPageComments(page.id, adIndex.index[page.id]);
         const before = comments.filter((c) => c.is_hidden).length;
@@ -199,9 +207,9 @@ export const service = {
     await saveState(state);
     await kvSet('cache', 'queueIds', queueIds);
     const secs = Math.round((Date.now() - started) / 1000);
-    console.log(`Sweep done in ${secs}s across ${adIndex.pages.length} pages` +
+    console.log(`Sweep done in ${secs}s across ${pages.length} enabled pages` +
       (hidden > 0 ? `, auto-hid ${hidden} comment(s)` : ''));
-    return { ok: true, pages: adIndex.pages.length, hidden, seconds: secs };
+    return { ok: true, pages: pages.length, hidden, seconds: secs };
   },
 };
 

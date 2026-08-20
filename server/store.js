@@ -9,16 +9,23 @@ const DEFAULT_KEYWORDS = [
   'stay away', 'beware', 'chargeback', 'lawsuit', 'bbb', 'report you', 'reported',
 ];
 
+const DEFAULT_PAGES = ['1165126110007822']; // Hearing.com
+
 const EMPTY = () => ({
   reviewed: {},
   banned: {},
   autoHidden: {},
-  settings: { autoHide: true, keywords: DEFAULT_KEYWORDS },
+  settings: { autoHide: true, keywords: DEFAULT_KEYWORDS, enabledPages: DEFAULT_PAGES },
 });
 
 export async function loadState() {
   const state = await kvGet('moderation', 'state');
-  return { ...EMPTY(), ...(state || {}) };
+  const empty = EMPTY();
+  return {
+    ...empty,
+    ...(state || {}),
+    settings: { ...empty.settings, ...(state?.settings || {}) },
+  };
 }
 
 export async function saveState(state) {
@@ -31,5 +38,6 @@ export function normalizeSettings(settings) {
     keywords: (settings.keywords || [])
       .map((k) => String(k).trim().toLowerCase())
       .filter(Boolean),
+    enabledPages: [...new Set((settings.enabledPages || []).map(String).filter(Boolean))],
   };
 }

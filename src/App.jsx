@@ -60,7 +60,9 @@ export default function App() {
       setPages(res.pages);
       setBootError(null);
       setNeedsLogin(false);
-      if (res.pages.length && !pageId) setPageId(res.pages[0].id);
+      if (res.pages.length && !res.pages.some((p) => p.id === pageId)) {
+        setPageId(res.pages[0].id);
+      }
     } catch (e) {
       if (e.authRequired) setNeedsLogin(true);
       else setBootError(e.message);
@@ -85,9 +87,10 @@ export default function App() {
   const saveSettings = async (next) => {
     try {
       const saved = await api.saveSettings(next);
-      setSettings(saved);
+      setSettings((s) => ({ ...s, ...saved }));
       setSettingsOpen(false);
-      toast(saved.autoHide ? 'Auto-hide is on — new matching comments will be hidden' : 'Auto-hide is off');
+      toast('Settings saved');
+      boot(); // page list may have changed
     } catch (e) {
       toast(e.message, 'error');
     }
