@@ -217,8 +217,16 @@ export default function App() {
         }
         case 'hide':
           await api.hide(comment.id, pageId, payload);
-          patch(comment.id, { is_hidden: payload });
-          toast(payload ? 'Comment hidden from the public' : 'Comment is visible again');
+          setComments((cs) => {
+            const next = cs.map((c) =>
+              c.id === comment.id
+                ? { ...c, is_hidden: payload, reviewed: payload ? true : c.reviewed }
+                : c
+            );
+            syncCount(next);
+            return next;
+          });
+          toast(payload ? 'Comment hidden and marked reviewed' : 'Comment is visible again');
           break;
         case 'delete':
           await api.remove(comment.id, pageId);

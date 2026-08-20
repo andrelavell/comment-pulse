@@ -127,6 +127,7 @@ export const service = {
 
   async hide(commentId, pageId, hidden) {
     await actions.setHidden(commentId, pageId, hidden);
+    if (hidden) await this.review([commentId], true); // hiding counts as handled
     await this.updateCachedComments(pageId, (cs) =>
       cs.map((c) => (c.id === commentId ? { ...c, is_hidden: hidden } : c))
     );
