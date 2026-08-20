@@ -21,7 +21,6 @@ export default function App() {
   const [tab, setTab] = useState('review');
   const [filter, setFilter] = useState('all');
   const [selectedId, setSelectedId] = useState(null);
-  const [busy, setBusy] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [sweeping, setSweeping] = useState(new Set());
   const [settings, setSettings] = useState(null);
@@ -156,108 +155,116 @@ export default function App() {
     }, 260);
   };
 
-  const handleReview = async (comment, reviewed) => {
-    try {
-      await api.review([comment.id], reviewed);
-      if (reviewed && tab === 'review') sweepThen(comment.id, () => patch(comment.id, { reviewed }));
-      else patch(comment.id, { reviewed });
-      setComments((cs) => {
-        const next = cs.map((c) => (c.id === comment.id ? { ...c, reviewed } : c));
-        syncCount(next);
-        return next;
-      });
-    } catch (e) {
-      toast(e.message, 'error');
-    }
+  // All actions are optimistic: the queue updates instantly and the API call
+  // runs in the background. If the call fails, the previous state is restored.
+  const applyOptimistic = (updater) =>
+    setComments((cs) => {
+      const next = updater(cs);
+      syncCount(next);
+      return next;
+    });
+
+  const runInBackground = (promise, snapshot, failMessage) => {
+    promise.catch((e) => {
+      if (e.authRequired) return setNeedsLogin(true);
+      setComments(snapshot);
+      syncCount(snapshot);
+      toast(`${failMessage}: ${e.message}`, 'error');
+    });
   };
 
-  const handleReviewAll = async (list) => {
-    try {
-      await api.review(list.map((c) => c.id), true);
-      const ids = new Set(list.map((c) => c.id));
-      setComments((cs) => {
-        const next = cs.map((c) => (ids.has(c.id) ? { ...c, reviewed: true } : c));
-        syncCount(next);
-        return next;
-      });
-      toast(`${list.length} comments marked reviewed`);
-    } catch (e) {
-      toast(e.message, 'error');
-    }
+  const handleReview = (comment, reviewed) => {
+    const snapshot = comments;
+    const apply = () => applyOptimistic((cs) =>
+      cs.map((c) => (c.id === comment.id ? { ...c, reviewed } : c))
+    );
+    if (reviewed && tab === 'review') sweepThen(comment.id, apply);
+    else apply();
+    runInBackground(api.review([comment.id], reviewed), snapshot, 'Review failed');
   };
 
-  const handleAction = async (type, comment, payload) => {
-    setBusy(true);
-    try {
-      switch (type) {
-        case 'review':
-          await handleReview(comment, payload);
-          break;
-        case 'reply': {
-          const { id } = await api.reply(comment.id, pageId, payload);
-          if (!comment.reviewed) await api.review([comment.id], true);
-          setComments((cs) => {
-            const next = cs.map((c) =>
-              c.id === comment.id
-                ? {
-                    ...c,
-                    reviewed: true,
-                    replies: [
-                      ...(c.replies || []),
-                      { id: id || `tmp_${Date.now()}`, message: payload, isPageAuthor: true, from: { name: page?.name } },
-                    ],
-                  }
-                : c
-            );
-            syncCount(next);
-            return next;
-          });
-          toast('Reply sent and marked reviewed');
-          break;
-        }
-        case 'hide':
-          await api.hide(comment.id, pageId, payload);
-          setComments((cs) => {
-            const next = cs.map((c) =>
-              c.id === comment.id
-                ? { ...c, is_hidden: payload, reviewed: payload ? true : c.reviewed }
-                : c
-            );
-            syncCount(next);
-            return next;
-          });
-          toast(payload ? 'Comment hidden and marked reviewed' : 'Comment is visible again');
-          break;
-        case 'delete':
-          await api.remove(comment.id, pageId);
-          setComments((cs) => {
-            const next = cs.filter((c) => c.id !== comment.id);
-            syncCount(next);
-            return next;
-          });
-          setSelectedId(null);
-          toast('Comment deleted');
-          break;
-        case 'ban':
-          await api.ban(pageId, comment.from.id, payload);
-          setComments((cs) =>
-            cs.map((c) => (c.from?.id === comment.from.id ? { ...c, authorBanned: payload } : c))
-          );
-          toast(payload ? `${comment.from.name || 'User'} banned from ${page?.name}` : 'User unbanned');
-          break;
-        case 'like':
-          await api.like(comment.id, pageId, payload);
-          patch(comment.id, {
-            user_likes: payload,
-            like_count: Math.max(0, comment.like_count + (payload ? 1 : -1)),
-          });
-          break;
+  const handleReviewAll = (list) => {
+    const snapshot = comments;
+    const ids = new Set(list.map((c) => c.id));
+    applyOptimistic((cs) => cs.map((c) => (ids.has(c.id) ? { ...c, reviewed: true } : c)));
+    toast(`${list.length} comments marked reviewed`);
+    runInBackground(api.review([...ids], true), snapshot, 'Review failed');
+  };
+
+  const handleAction = (type, comment, payload) => {
+    const snapshot = comments;
+    switch (type) {
+      case 'review':
+        handleReview(comment, payload);
+        break;
+      case 'reply': {
+        const tempId = `tmp_${Date.now()}`;
+        applyOptimistic((cs) =>
+          cs.map((c) =>
+            c.id === comment.id
+              ? {
+                  ...c,
+                  reviewed: true,
+                  replies: [
+                    ...(c.replies || []),
+                    { id: tempId, message: payload, isPageAuthor: true, from: { name: page?.name } },
+                  ],
+                }
+              : c
+          )
+        );
+        toast('Reply sent and marked reviewed');
+        runInBackground(
+          api.reply(comment.id, pageId, payload).then(({ id }) => {
+            if (id) {
+              setComments((cs) =>
+                cs.map((c) =>
+                  c.id === comment.id
+                    ? { ...c, replies: c.replies.map((r) => (r.id === tempId ? { ...r, id } : r)) }
+                    : c
+                )
+              );
+            }
+          }),
+          snapshot,
+          'Reply failed'
+        );
+        break;
       }
-    } catch (e) {
-      if (e.authRequired) setNeedsLogin(true);
-      else toast(e.message, 'error');
-    } finally {
-      setBusy(false);
+      case 'hide':
+        applyOptimistic((cs) =>
+          cs.map((c) =>
+            c.id === comment.id
+              ? { ...c, is_hidden: payload, reviewed: payload ? true : c.reviewed }
+              : c
+          )
+        );
+        toast(payload ? 'Comment hidden and marked reviewed' : 'Comment is visible again');
+        runInBackground(api.hide(comment.id, pageId, payload), snapshot, 'Hide failed');
+        break;
+      case 'delete':
+        applyOptimistic((cs) => cs.filter((c) => c.id !== comment.id));
+        if (selectedId === comment.id) setSelectedId(null);
+        toast('Comment deleted');
+        runInBackground(api.remove(comment.id, pageId), snapshot, 'Delete failed');
+        break;
+      case 'ban':
+        applyOptimistic((cs) =>
+          cs.map((c) => (c.from?.id === comment.from.id ? { ...c, authorBanned: payload } : c))
+        );
+        toast(payload ? `${comment.from.name || 'User'} banned from ${page?.name}` : 'User unbanned');
+        runInBackground(api.ban(pageId, comment.from.id, payload), snapshot, 'Ban failed');
+        break;
+      case 'like':
+        applyOptimistic((cs) =>
+          cs.map((c) =>
+            c.id === comment.id
+              ? { ...c, user_likes: payload, like_count: Math.max(0, c.like_count + (payload ? 1 : -1)) }
+              : c
+          )
+        );
+        runInBackground(api.like(comment.id, pageId, payload), snapshot, 'Like failed');
+        break;
     }
   };
 
@@ -308,11 +315,10 @@ export default function App() {
         loading={loading}
         queueTotal={queueTotal.current}
         sweeping={sweeping}
-        busy={busy}
         onQuickAction={handleAction}
         onOpenSettings={() => setSettingsOpen(true)}
       />
-      <Detail comment={selected} page={page} busy={busy} onAction={handleAction} />
+      <Detail comment={selected} page={page} onAction={handleAction} />
 
       {settingsOpen && settings && (
         <Settings settings={settings} onSave={saveSettings} onClose={() => setSettingsOpen(false)} />

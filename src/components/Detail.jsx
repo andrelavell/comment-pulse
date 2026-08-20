@@ -14,7 +14,7 @@ function Avatar({ from, size = '' }) {
   );
 }
 
-export default function Detail({ comment, page, busy, onAction }) {
+export default function Detail({ comment, page, onAction }) {
   const [reply, setReply] = useState('');
   const [confirm, setConfirm] = useState(null); // 'delete' | 'ban' | null
   const replyRef = useRef(null);
@@ -52,7 +52,6 @@ export default function Detail({ comment, page, busy, onAction }) {
         <div className="detail-head-actions">
           <button
             className={`pill-btn ${comment.reviewed ? 'teal' : 'primary'}`}
-            disabled={busy}
             onClick={() => act('review', !comment.reviewed)}
           >
             <CheckIcon size={14} /> {comment.reviewed ? 'Reviewed' : 'Mark reviewed'}
@@ -123,7 +122,7 @@ export default function Detail({ comment, page, busy, onAction }) {
       <div className="mod-bar">
         <button
           className="tool-btn"
-          disabled={busy || !comment.can_like}
+          disabled={!comment.can_like}
           onClick={() => act('like', !comment.user_likes)}
           title={comment.user_likes ? 'Unlike as page' : 'Like as page'}
         >
@@ -132,7 +131,7 @@ export default function Detail({ comment, page, busy, onAction }) {
         </button>
         <button
           className="tool-btn"
-          disabled={busy || !comment.can_hide}
+          disabled={!comment.can_hide}
           onClick={() => act('hide', !comment.is_hidden)}
         >
           {comment.is_hidden ? <EyeIcon size={15} /> : <EyeOffIcon size={15} />}
@@ -140,14 +139,14 @@ export default function Detail({ comment, page, busy, onAction }) {
         </button>
         <button
           className="tool-btn danger"
-          disabled={busy || !comment.can_remove}
+          disabled={!comment.can_remove}
           onClick={() => setConfirm('delete')}
         >
           <TrashIcon size={15} /> Delete
         </button>
         <button
           className="tool-btn danger"
-          disabled={busy || !canBan}
+          disabled={!canBan}
           title={canBan ? `${comment.authorBanned ? 'Unban' : 'Ban'} ${author} from ${page?.name}` : 'Meta did not share this commenter\u2019s identity, so they can\u2019t be banned from here'}
           onClick={() => (comment.authorBanned ? act('ban', false) : setConfirm('ban'))}
         >
@@ -163,8 +162,7 @@ export default function Detail({ comment, page, busy, onAction }) {
           <div>
             <button
               className="pill-btn danger"
-              disabled={busy}
-              onClick={() => { act(confirm === 'delete' ? 'delete' : 'ban', true); setConfirm(null); }}
+                onClick={() => { act(confirm === 'delete' ? 'delete' : 'ban', true); setConfirm(null); }}
             >
               {confirm === 'delete' ? 'Delete comment' : 'Ban user'}
             </button>
@@ -193,7 +191,7 @@ export default function Detail({ comment, page, busy, onAction }) {
           <span className="mono">{MAX_LEN - reply.length}</span>
           <button
             className="pill-btn primary"
-            disabled={busy || !reply.trim() || !comment.can_comment}
+            disabled={!reply.trim() || !comment.can_comment}
             onClick={() => { act('reply', reply.trim()); setReply(''); }}
           >
             <ReplyIcon size={14} /> Send reply

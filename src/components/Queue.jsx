@@ -14,7 +14,7 @@ const FILTERS = [
 export default function Queue({
   page, comments, tab, setTab, filter, setFilter, selectedId, onSelect,
   onReview, onReviewAll, onRefresh, loading, queueTotal, sweeping,
-  busy, onQuickAction, onOpenSettings,
+  onQuickAction, onOpenSettings,
 }) {
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -160,7 +160,6 @@ export default function Queue({
                     Delete?
                     <button
                       className="link-btn danger-link"
-                      disabled={busy}
                       onClick={() => { onQuickAction('delete', c); setConfirmDeleteId(null); }}
                     >
                       Yes
@@ -171,7 +170,7 @@ export default function Queue({
                   <>
                     <button
                       className="card-tool"
-                      disabled={busy || !c.can_hide}
+                      disabled={!c.can_hide}
                       title={c.is_hidden ? 'Unhide comment' : 'Hide comment'}
                       aria-label={c.is_hidden ? 'Unhide comment' : 'Hide comment'}
                       onClick={() => onQuickAction('hide', c, !c.is_hidden)}
@@ -180,7 +179,7 @@ export default function Queue({
                     </button>
                     <button
                       className="card-tool danger"
-                      disabled={busy || !c.can_remove}
+                      disabled={!c.can_remove}
                       title="Delete comment"
                       aria-label="Delete comment"
                       onClick={() => setConfirmDeleteId(c.id)}
