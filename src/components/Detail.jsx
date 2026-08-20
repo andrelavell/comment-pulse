@@ -6,6 +6,24 @@ import {
 
 const MAX_LEN = 2000;
 
+// Cheap language sniff: only offer Translate when a comment doesn't look English.
+const EN_WORDS = new Set(
+  ('the be to of and a in that have i it for not on with he as you do at this but his by from they we say her she or an will my one all would there their what so up out if about who get which go me when make can like time no just him know take people into year your good some could them see other than then now look only come its over think also back after use two how our work first well way even new want because any these give day most us are is was were been has had did does am doesn\u2019t don\u2019t won\u2019t can\u2019t hear hearing loss aids severe does anyone bought where why really'.split(/\s+/))
+);
+
+function looksEnglish(text) {
+  if (!text) return true;
+  // non-Latin scripts are an instant "not English"
+  if (/[\u0400-\u04FF\u0590-\u05FF\u0600-\u06FF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u0E00-\u0E7F]/.test(text)) {
+    return false;
+  }
+  const words = text.toLowerCase().match(/[a-z\u00C0-\u024F']+/g) || [];
+  if (words.length < 3) return true;
+  const hits = words.filter((w) => EN_WORDS.has(w)).length;
+  const accented = (text.match(/[\u00C0-\u024F]/g) || []).length;
+  return hits / words.length >= 0.18 && accented / text.length < 0.03;
+}
+
 function Avatar({ from, size = '' }) {
   return from?.picture?.data?.url ? (
     <img className={`avatar ${size}`} src={from.picture.data.url} alt="" />
@@ -58,7 +76,7 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
   };
 
   const TranslateButton = ({ id, text }) =>
-    text ? (
+    text && !looksEnglish(text) ? (
       <button className="translate-btn" onClick={() => toggleTranslate(id, text)}>
         {translations[id] === 'loading'
           ? 'Translating…'
