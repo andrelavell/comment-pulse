@@ -60,14 +60,14 @@ export default function Detail({ comment, page, onAction }) {
       </header>
 
       <div className="detail-scroll">
-        <div className="ad-context">
+        <div className="creative-card">
           {comment.post.picture && <img src={comment.post.picture} alt="" />}
-          <div className="ad-context-body">
-            <span className="ad-context-label">Ad post · {comment.ads[0]?.account || page?.name}</span>
+          <div className="creative-card-body">
+            <span className="creative-card-label">Ad post · {comment.ads[0]?.account || page?.name}</span>
             <p>{comment.post.message ? comment.post.message.slice(0, 180) + (comment.post.message.length > 180 ? '…' : '') : 'Untitled ad post'}</p>
-            <div className="ad-context-meta">
+            <div className="creative-card-meta">
               {comment.ads.map((a) => (
-                <span key={a.id} className={`ad-chip ${a.status === 'ACTIVE' ? '' : 'paused'}`}>
+                <span key={a.id} className={`creative-chip ${a.status === 'ACTIVE' ? '' : 'paused'}`}>
                   {a.status === 'ACTIVE' && <span className="live-dot" />}
                   {a.name}
                 </span>

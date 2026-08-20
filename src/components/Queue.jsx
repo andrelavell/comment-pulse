@@ -138,7 +138,7 @@ export default function Queue({
             </div>
             <p className="card-msg">{c.message || <em>(no text — sticker or photo)</em>}</p>
             <div className="card-foot">
-              <span className="ad-chip" title={c.ads.map((a) => a.name).join(', ')}>
+              <span className="creative-chip" title={c.ads.map((a) => a.name).join(', ')}>
                 {c.adActive && <span className="live-dot" />}
                 {c.ads[0]?.name || 'Ad post'}
               </span>

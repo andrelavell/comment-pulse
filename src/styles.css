@@ -371,7 +371,7 @@ a { color: var(--ember); text-decoration: none; }
 
 .card-foot { display: flex; align-items: center; gap: 6px; }
 
-.ad-chip {
+.creative-chip {
   font-family: var(--mono);
   font-size: 10px;
   color: var(--ink-soft);
@@ -386,7 +386,7 @@ a { color: var(--ember); text-decoration: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ad-chip.paused { opacity: 0.6; }
+.creative-chip.paused { opacity: 0.6; }
 .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); flex-shrink: 0; }
 
 .card-flags { flex: 1; display: flex; gap: 5px; }
@@ -480,7 +480,7 @@ a { color: var(--ember); text-decoration: none; }
 
 .detail-scroll { flex: 1; overflow-y: auto; padding: 16px 20px; }
 
-.ad-context {
+.creative-card {
   display: flex;
   gap: 12px;
   background: var(--card);
@@ -490,22 +490,22 @@ a { color: var(--ember); text-decoration: none; }
   margin-bottom: 18px;
   box-shadow: var(--shadow);
 }
-.ad-context img {
+.creative-card img {
   width: 72px; height: 72px;
   border-radius: var(--r-sm);
   object-fit: cover;
   flex-shrink: 0;
 }
-.ad-context-body { min-width: 0; }
-.ad-context-label {
+.creative-card-body { min-width: 0; }
+.creative-card-label {
   font-family: var(--mono);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--ink-faint);
 }
-.ad-context-body p { margin: 4px 0 8px; font-size: 12.5px; line-height: 1.4; color: var(--ink-soft); }
-.ad-context-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.creative-card-body p { margin: 4px 0 8px; font-size: 12.5px; line-height: 1.4; color: var(--ink-soft); }
+.creative-card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 .thread { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
 
