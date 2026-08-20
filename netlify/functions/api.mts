@@ -16,7 +16,7 @@ export default async (req: Request, _context: Context) => {
   const url = new URL(req.url);
   const path = url.pathname.replace(/^\/api/, "") || "/";
   const method = req.method;
-  const body = method === "POST" ? await req.json().catch(() => ({})) : {};
+  const body = method === "POST" || method === "PUT" ? await req.json().catch(() => ({})) : {};
 
   try {
     if (method === "POST" && path === "/login") {
@@ -59,6 +59,17 @@ export default async (req: Request, _context: Context) => {
     }
     if ((m = path.match(/^\/feedback\/([^/]+)$/)) && method === "DELETE") {
       return json(await service.deleteFeedback(m[1]));
+    }
+    if (method === "GET" && path === "/activity") return json(await service.listActivity());
+    if (method === "GET" && path === "/saved-replies") return json(await service.listSavedReplies());
+    if (method === "POST" && path === "/saved-replies") {
+      return json(await service.addSavedReply(body.title, body.text));
+    }
+    if ((m = path.match(/^\/saved-replies\/([^/]+)$/)) && method === "PUT") {
+      return json(await service.updateSavedReply(m[1], body.title, body.text));
+    }
+    if ((m = path.match(/^\/saved-replies\/([^/]+)$/)) && method === "DELETE") {
+      return json(await service.deleteSavedReply(m[1]));
     }
     if (method === "GET" && path === "/settings") return json(await service.getSettings());
     if (method === "POST" && path === "/settings") return json(await service.saveSettings(body));

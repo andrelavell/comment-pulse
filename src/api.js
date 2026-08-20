@@ -37,6 +37,12 @@ export const api = {
   addFeedback: (highlight, feedback, comment) =>
     req('/api/feedback', { method: 'POST', body: { highlight, feedback, comment } }),
   deleteFeedback: (id) => req(`/api/feedback/${id}`, { method: 'DELETE' }),
+  activity: () => req('/api/activity'),
+  savedReplies: () => req('/api/saved-replies'),
+  addSavedReply: (title, text) => req('/api/saved-replies', { method: 'POST', body: { title, text } }),
+  updateSavedReply: (id, title, text) =>
+    req(`/api/saved-replies/${id}`, { method: 'PUT', body: { title, text } }),
+  deleteSavedReply: (id) => req(`/api/saved-replies/${id}`, { method: 'DELETE' }),
   settings: () => req('/api/settings'),
   saveSettings: (settings) => req('/api/settings', { method: 'POST', body: settings }),
 };

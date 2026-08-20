@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar.jsx';
 import Queue from './components/Queue.jsx';
 import Detail from './components/Detail.jsx';
 import Settings from './components/Settings.jsx';
+import Activity from './components/Activity.jsx';
 import Login from './components/Login.jsx';
 
 let toastId = 0;
@@ -25,6 +26,7 @@ export default function App() {
   const [sweeping, setSweeping] = useState(new Set());
   const [settings, setSettings] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
   const [building, setBuilding] = useState(false);
   const [lastSweep, setLastSweep] = useState(null);
@@ -206,6 +208,48 @@ export default function App() {
     runInBackground(api.review([...ids], true), snapshot, 'Review failed');
   };
 
+  // Bulk actions are optimistic too. If any background call fails, the list
+  // is re-fetched so the UI reflects what actually happened on Meta.
+  const handleBulk = (type, list) => {
+    const ids = new Set(list.map((c) => c.id));
+    const n = list.length;
+    const resyncOnFailure = async (promises, verb) => {
+      const results = await Promise.allSettled(promises);
+      const failed = results.filter((r) => r.status === 'rejected');
+      if (failed.length) {
+        if (failed.some((r) => r.reason?.authRequired)) return setNeedsLogin(true);
+        toast(`${verb} failed for ${failed.length} of ${n} — resyncing`, 'error');
+        loadComments(pageId, true);
+      }
+    };
+    switch (type) {
+      case 'review':
+        applyOptimistic((cs) => cs.map((c) => (ids.has(c.id) ? { ...c, reviewed: true } : c)));
+        toast(`${n} comment${n > 1 ? 's' : ''} marked reviewed`);
+        resyncOnFailure([api.review([...ids], true)], 'Review');
+        break;
+      case 'hide':
+        applyOptimistic((cs) =>
+          cs.map((c) => (ids.has(c.id) ? { ...c, is_hidden: true, reviewed: true } : c))
+        );
+        toast(`${n} comment${n > 1 ? 's' : ''} hidden`);
+        resyncOnFailure(
+          list.filter((c) => c.can_hide && !c.is_hidden).map((c) => api.hide(c.id, pageId, true)),
+          'Hide'
+        );
+        break;
+      case 'delete':
+        applyOptimistic((cs) => cs.filter((c) => !ids.has(c.id)));
+        if (ids.has(selectedId)) setSelectedId(null);
+        toast(`${n} comment${n > 1 ? 's' : ''} deleted`);
+        resyncOnFailure(
+          list.filter((c) => c.can_remove).map((c) => api.remove(c.id, pageId)),
+          'Delete'
+        );
+        break;
+    }
+  };
+
   const handleAction = (type, comment, payload) => {
     const snapshot = comments;
     switch (type) {
@@ -360,11 +404,14 @@ export default function App() {
         sweeping={sweeping}
         pulsing={pulsing}
         onQuickAction={handleAction}
+        onBulk={handleBulk}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenActivity={() => setActivityOpen(true)}
       />
       <Detail
         comment={selected}
         page={page}
+        notify={toast}
         onAction={handleAction}
         onAiDraft={async (comment) => {
           try {
@@ -390,6 +437,8 @@ export default function App() {
       {settingsOpen && settings && (
         <Settings settings={settings} onSave={saveSettings} onClose={() => setSettingsOpen(false)} />
       )}
+
+      {activityOpen && <Activity pages={pages} onClose={() => setActivityOpen(false)} />}
 
       <div className="toasts" role="status">
         {toasts.map((t) => (

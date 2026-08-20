@@ -3,6 +3,10 @@ import { buildAdIndex, fetchPageComments, actions, GraphError } from './graph.js
 import { kvGet, kvSet } from './storage.js';
 import { loadState, saveState, normalizeSettings } from './store.js';
 import { logReply, draftReply, translateText, listFeedback, addFeedback, deleteFeedback } from './ai.js';
+import { logActivity, listActivity } from './activity.js';
+import { listSavedReplies, addSavedReply, updateSavedReply, deleteSavedReply } from './saved-replies.js';
+
+const snippet = (s) => String(s || '').slice(0, 160);
 
 const AD_INDEX_TTL = 30 * 60 * 1000;
 
@@ -43,6 +47,10 @@ async function autoHidePass(comments, pageId, state) {
       state.autoHidden[c.id] = { at: new Date().toISOString(), keyword: kw };
       changed = true;
       console.log(`Auto-hid ${c.id} (matched "${kw}")`);
+      await logActivity({
+        action: 'autohide', actor: 'auto', pageId, commentId: c.id,
+        comment: snippet(c.message), detail: `matched "${kw}"`,
+      });
     } catch (e) {
       console.warn(`Auto-hide failed for ${c.id}: ${e.message}`);
     }
@@ -109,13 +117,22 @@ export const service = {
     await kvSet('cache', 'sweepStatus', { ...prev, error: message, errorAt: Date.now() });
   },
 
-  async review(commentIds, reviewed) {
+  async _setReviewed(commentIds, reviewed) {
     const state = await loadState();
     for (const id of commentIds) {
       if (reviewed) state.reviewed[id] = { at: new Date().toISOString() };
       else delete state.reviewed[id];
     }
     await saveState(state);
+  },
+
+  async review(commentIds, reviewed) {
+    await this._setReviewed(commentIds, reviewed);
+    await logActivity({
+      action: reviewed ? 'review' : 'unreview',
+      commentId: commentIds.length === 1 ? commentIds[0] : null,
+      detail: commentIds.length > 1 ? `${commentIds.length} comments` : '',
+    });
     return { ok: true };
   },
 
@@ -128,7 +145,7 @@ export const service = {
 
   async reply(commentId, pageId, message) {
     const out = await actions.reply(commentId, pageId, message);
-    await this.review([commentId], true);
+    await this._setReviewed([commentId], true);
     let original = null;
     await this.updateCachedComments(pageId, (cs) =>
       cs.map((c) => {
@@ -143,6 +160,10 @@ export const service = {
       commentId,
       comment: original?.message || '',
       reply: message,
+    });
+    await logActivity({
+      action: 'reply', pageId, commentId,
+      comment: snippet(original?.message), detail: snippet(message),
     });
     return { ok: true, id: out.id };
   },
@@ -165,26 +186,40 @@ export const service = {
 
   async hide(commentId, pageId, hidden) {
     await actions.setHidden(commentId, pageId, hidden);
-    if (hidden) await this.review([commentId], true); // hiding counts as handled
+    if (hidden) await this._setReviewed([commentId], true); // hiding counts as handled
+    let msg = null;
     await this.updateCachedComments(pageId, (cs) =>
-      cs.map((c) => (c.id === commentId ? { ...c, is_hidden: hidden } : c))
+      cs.map((c) => {
+        if (c.id !== commentId) return c;
+        msg = c.message;
+        return { ...c, is_hidden: hidden };
+      })
     );
+    await logActivity({
+      action: hidden ? 'hide' : 'unhide', pageId, commentId, comment: snippet(msg),
+    });
     return { ok: true };
   },
 
   async remove(commentId, pageId) {
     await actions.remove(commentId, pageId);
-    await this.review([commentId], true);
+    await this._setReviewed([commentId], true);
+    let msg = null;
     // The id may be a top-level comment or a nested reply.
     await this.updateCachedComments(pageId, (cs) =>
       cs
-        .filter((c) => c.id !== commentId)
-        .map((c) =>
-          c.replies?.some((r) => r.id === commentId)
-            ? { ...c, replies: c.replies.filter((r) => r.id !== commentId) }
-            : c
-        )
+        .filter((c) => {
+          if (c.id === commentId) { msg = c.message; return false; }
+          return true;
+        })
+        .map((c) => {
+          const r = c.replies?.find((x) => x.id === commentId);
+          if (!r) return c;
+          msg = r.message;
+          return { ...c, replies: c.replies.filter((x) => x.id !== commentId) };
+        })
     );
+    await logActivity({ action: 'delete', pageId, commentId, comment: snippet(msg) });
     return { ok: true };
   },
 
@@ -208,6 +243,31 @@ export const service = {
     if (banned) state.banned[`${pageId}:${userId}`] = { at: new Date().toISOString() };
     else delete state.banned[`${pageId}:${userId}`];
     await saveState(state);
+    await logActivity({ action: banned ? 'ban' : 'unban', pageId, detail: `user ${userId}` });
+    return { ok: true };
+  },
+
+  async listActivity() {
+    return { activity: await listActivity() };
+  },
+
+  async listSavedReplies() {
+    return { savedReplies: await listSavedReplies() };
+  },
+
+  async addSavedReply(title, text) {
+    if (!text?.trim()) throw new GraphError({ message: 'Reply text is required' }, 400);
+    return { entry: await addSavedReply({ title, text }) };
+  },
+
+  async updateSavedReply(id, title, text) {
+    const entry = await updateSavedReply(id, { title, text });
+    if (!entry) throw new GraphError({ message: 'Saved reply not found' }, 404);
+    return { entry };
+  },
+
+  async deleteSavedReply(id) {
+    await deleteSavedReply(id);
     return { ok: true };
   },
 

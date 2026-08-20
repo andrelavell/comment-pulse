@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { ShieldIcon, SparkIcon, InboxIcon, GearIcon } from './icons.jsx';
+import { ShieldIcon, SparkIcon, InboxIcon, GearIcon, BookmarkIcon } from './icons.jsx';
 
 const MODELS = [
   { id: 'gpt-5', label: 'GPT-5', hint: 'Smartest — recommended' },
@@ -20,6 +20,7 @@ const REASONING = [
 const TABS = [
   { id: 'pages', label: 'Pages', icon: InboxIcon },
   { id: 'autohide', label: 'Auto-hide', icon: ShieldIcon },
+  { id: 'templates', label: 'Saved replies', icon: BookmarkIcon },
   { id: 'ai', label: 'AI replies', icon: SparkIcon },
   { id: 'feedback', label: 'Feedback', icon: GearIcon },
 ];
@@ -33,10 +34,47 @@ export default function Settings({ settings, onSave, onClose }) {
   const [aiModel, setAiModel] = useState(settings.aiModel || 'gpt-5');
   const [aiReasoning, setAiReasoning] = useState(settings.aiReasoning || 'low');
   const [feedback, setFeedback] = useState(null);
+  const [templates, setTemplates] = useState(null);
+  const [tplTitle, setTplTitle] = useState('');
+  const [tplText, setTplText] = useState('');
+  const [tplEditId, setTplEditId] = useState(null);
+  const [tplEdit, setTplEdit] = useState({ title: '', text: '' });
 
   useEffect(() => {
     api.feedback().then(({ feedback }) => setFeedback(feedback)).catch(() => setFeedback([]));
+    api.savedReplies().then(({ savedReplies }) => setTemplates(savedReplies)).catch(() => setTemplates([]));
   }, []);
+
+  const addTemplate = async () => {
+    if (!tplText.trim()) return;
+    try {
+      const { entry } = await api.addSavedReply(tplTitle.trim(), tplText.trim());
+      setTemplates((t) => [...(t || []), entry]);
+      setTplTitle('');
+      setTplText('');
+    } catch {}
+  };
+
+  const saveTemplateEdit = async () => {
+    if (!tplEdit.text.trim()) return;
+    const id = tplEditId;
+    setTemplates((t) => t.map((x) => (x.id === id ? { ...x, title: tplEdit.title.trim(), text: tplEdit.text.trim() } : x)));
+    setTplEditId(null);
+    try {
+      await api.updateSavedReply(id, tplEdit.title.trim(), tplEdit.text.trim());
+    } catch {
+      api.savedReplies().then(({ savedReplies }) => setTemplates(savedReplies)).catch(() => {});
+    }
+  };
+
+  const removeTemplate = async (id) => {
+    setTemplates((t) => t.filter((x) => x.id !== id));
+    try {
+      await api.deleteSavedReply(id);
+    } catch {
+      api.savedReplies().then(({ savedReplies }) => setTemplates(savedReplies)).catch(() => {});
+    }
+  };
 
   const removeFeedback = async (id) => {
     setFeedback((f) => f.filter((x) => x.id !== id));
@@ -139,6 +177,87 @@ export default function Settings({ settings, onSave, onClose }) {
                 rows={12}
                 spellCheck={false}
               />
+            </>
+          )}
+
+          {tab === 'templates' && (
+            <>
+              <div className="field-label">
+                Saved replies {templates && <span className="tab-n">{templates.length}</span>}
+                <small>
+                  Canned responses for common questions. Insert them from the bookmark button
+                  in the reply box, or save any typed reply as a new template from there.
+                </small>
+              </div>
+
+              <div className="tpl-add">
+                <input
+                  value={tplTitle}
+                  placeholder="Name (optional) — e.g. Price question"
+                  onChange={(e) => setTplTitle(e.target.value)}
+                />
+                <textarea
+                  value={tplText}
+                  rows={3}
+                  placeholder="Reply text — e.g. Great question! They're $249 with free US shipping and 45-day returns."
+                  onChange={(e) => setTplText(e.target.value)}
+                />
+                <button className="pill-btn primary sm" disabled={!tplText.trim()} onClick={addTemplate}>
+                  Add template
+                </button>
+              </div>
+
+              {!templates ? (
+                <p className="profile-note">Loading…</p>
+              ) : templates.length === 0 ? (
+                <p className="profile-note">No saved replies yet — add your first one above.</p>
+              ) : (
+                <div className="feedback-list">
+                  {templates.map((t) => (
+                    <div key={t.id} className="feedback-item">
+                      {tplEditId === t.id ? (
+                        <div className="tpl-edit">
+                          <input
+                            value={tplEdit.title}
+                            placeholder="Name (optional)"
+                            onChange={(e) => setTplEdit((x) => ({ ...x, title: e.target.value }))}
+                          />
+                          <textarea
+                            value={tplEdit.text}
+                            rows={3}
+                            onChange={(e) => setTplEdit((x) => ({ ...x, text: e.target.value }))}
+                          />
+                          <span>
+                            <button className="link-btn" disabled={!tplEdit.text.trim()} onClick={saveTemplateEdit}>Save</button>
+                            <button className="link-btn muted" onClick={() => setTplEditId(null)}>Cancel</button>
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="feedback-item-body">
+                            {t.title && <strong>{t.title}</strong>}
+                            <span className="tpl-text">{t.text}</span>
+                          </div>
+                          <button
+                            className="link-btn"
+                            onClick={() => { setTplEditId(t.id); setTplEdit({ title: t.title || '', text: t.text }); }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="feedback-x"
+                            title="Delete this template"
+                            aria-label="Delete this template"
+                            onClick={() => removeTemplate(t.id)}
+                          >
+                            ×
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
 

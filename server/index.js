@@ -65,6 +65,16 @@ app.post('/api/feedback', wrap(async (req, res) =>
 app.delete('/api/feedback/:id', wrap(async (req, res) =>
   res.json(await service.deleteFeedback(req.params.id))));
 
+app.get('/api/activity', wrap(async (_req, res) => res.json(await service.listActivity())));
+
+app.get('/api/saved-replies', wrap(async (_req, res) => res.json(await service.listSavedReplies())));
+app.post('/api/saved-replies', wrap(async (req, res) =>
+  res.json(await service.addSavedReply(req.body.title, req.body.text))));
+app.put('/api/saved-replies/:id', wrap(async (req, res) =>
+  res.json(await service.updateSavedReply(req.params.id, req.body.title, req.body.text))));
+app.delete('/api/saved-replies/:id', wrap(async (req, res) =>
+  res.json(await service.deleteSavedReply(req.params.id))));
+
 app.get('/api/settings', wrap(async (_req, res) => res.json(await service.getSettings())));
 app.post('/api/settings', wrap(async (req, res) => res.json(await service.saveSettings(req.body))));
 

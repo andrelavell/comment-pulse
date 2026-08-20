@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, fullTime } from '../api.js';
 import {
-  CheckIcon, ReplyIcon, EyeIcon, EyeOffIcon, TrashIcon, BanIcon, ThumbIcon, ExternalIcon, SparkIcon,
+  CheckIcon, ReplyIcon, EyeIcon, EyeOffIcon, TrashIcon, BanIcon, ThumbIcon, ExternalIcon, SparkIcon, BookmarkIcon,
 } from './icons.jsx';
 
 const MAX_LEN = 2000;
@@ -53,7 +53,7 @@ function Avatar({ from, size = '' }) {
   );
 }
 
-export default function Detail({ comment, page, onAction, onAiDraft, onFeedback }) {
+export default function Detail({ comment, page, notify, onAction, onAiDraft, onFeedback }) {
   const [reply, setReply] = useState('');
   const [confirm, setConfirm] = useState(null); // 'delete' | 'ban' | null
   const [drafting, setDrafting] = useState(false);
@@ -62,6 +62,10 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
   const [fbText, setFbText] = useState('');
   const [confirmReplyId, setConfirmReplyId] = useState(null);
   const [translations, setTranslations] = useState({}); // id -> text | 'loading' | null(hidden)
+  const [tplOpen, setTplOpen] = useState(false);
+  const [templates, setTemplates] = useState(null); // null = not fetched yet
+  const [tplSaving, setTplSaving] = useState(false);
+  const [tplTitle, setTplTitle] = useState('');
   const replyRef = useRef(null);
 
   useEffect(() => {
@@ -73,7 +77,41 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
     setFbText('');
     setConfirmReplyId(null);
     setTranslations({});
+    setTplOpen(false);
+    setTplSaving(false);
+    setTplTitle('');
   }, [comment?.id]);
+
+  const openTemplates = async () => {
+    if (tplOpen) return setTplOpen(false);
+    setTplOpen(true);
+    try {
+      const { savedReplies } = await api.savedReplies();
+      setTemplates(savedReplies);
+    } catch {
+      setTemplates([]);
+    }
+  };
+
+  const insertTemplate = (text) => {
+    setReply((r) => (r.trim() ? `${r.trimEnd()} ${text}` : text));
+    setTplOpen(false);
+    replyRef.current?.focus();
+  };
+
+  const saveTemplate = async () => {
+    const text = reply.trim();
+    if (!text) return;
+    try {
+      const { entry } = await api.addSavedReply(tplTitle.trim(), text);
+      setTemplates((t) => (t ? [...t, entry] : t));
+      notify?.('Saved as a reply template');
+    } catch (e) {
+      notify?.(e.message, 'error');
+    }
+    setTplSaving(false);
+    setTplTitle('');
+  };
 
   const toggleTranslate = async (id, text) => {
     const current = translations[id];
@@ -359,6 +397,28 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
             )}
           </div>
         )}
+        {tplOpen && (
+          <div className="tpl-pop">
+            <div className="tpl-pop-head">
+              <BookmarkIcon size={13} /> Saved replies
+              <button className="feedback-x" onClick={() => setTplOpen(false)} aria-label="Close">×</button>
+            </div>
+            {!templates ? (
+              <p className="profile-note">Loading…</p>
+            ) : templates.length === 0 ? (
+              <p className="profile-note">
+                No saved replies yet. Type a reply below and click the bookmark to save it as a template.
+              </p>
+            ) : (
+              templates.map((t) => (
+                <button key={t.id} className="tpl-item" onClick={() => insertTemplate(t.text)}>
+                  {t.title && <strong>{t.title}</strong>}
+                  <span>{t.text}</span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
         <div className="composer-foot">
           <button
             className="pill-btn ghost ai-btn"
@@ -369,6 +429,39 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
             <SparkIcon size={14} className={drafting ? 'spin' : ''} />
             {drafting ? 'Drafting…' : 'Respond with AI'}
           </button>
+          <button
+            className={`pill-btn ghost tpl-btn ${tplOpen ? 'active' : ''}`}
+            onClick={openTemplates}
+            title="Insert a saved reply"
+          >
+            <BookmarkIcon size={14} /> Saved
+          </button>
+          {reply.trim() && !tplSaving && (
+            <button
+              className="link-btn tpl-save-link"
+              onClick={() => setTplSaving(true)}
+              title="Save the current reply as a reusable template"
+            >
+              Save as template
+            </button>
+          )}
+          {tplSaving && (
+            <span className="tpl-save-row">
+              <input
+                className="feedback-input"
+                autoFocus
+                value={tplTitle}
+                placeholder="Template name (optional)"
+                onChange={(e) => setTplTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveTemplate();
+                  if (e.key === 'Escape') { setTplSaving(false); setTplTitle(''); }
+                }}
+              />
+              <button className="link-btn" onClick={saveTemplate}>Save</button>
+              <button className="link-btn muted" onClick={() => { setTplSaving(false); setTplTitle(''); }}>Cancel</button>
+            </span>
+          )}
           <span className="composer-spacer" />
           <span className="mono">{MAX_LEN - reply.length}</span>
           <button
