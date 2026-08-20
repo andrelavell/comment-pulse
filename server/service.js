@@ -97,7 +97,16 @@ export const service = {
         toReview: info.ids.filter((id) => !state.reviewed[id] && !state.autoHidden[id]).length,
       };
     }
-    return { counts, lastSweep: sweepStatus?.at || null };
+    return {
+      counts,
+      lastSweep: sweepStatus?.at || null,
+      sweepError: sweepStatus?.error || null,
+    };
+  },
+
+  async recordSweepError(message) {
+    const prev = (await kvGet('cache', 'sweepStatus')) || {};
+    await kvSet('cache', 'sweepStatus', { ...prev, error: message, errorAt: Date.now() });
   },
 
   async review(commentIds, reviewed) {

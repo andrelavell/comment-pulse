@@ -12,6 +12,11 @@ export default async (req: Request, _context: Context) => {
     console.warn("Sweep rejected: bad key");
     return;
   }
-  const result = await service.sweep();
-  console.log("Sweep result:", JSON.stringify(result));
+  try {
+    const result = await service.sweep();
+    console.log("Sweep result:", JSON.stringify(result));
+  } catch (e: any) {
+    console.error("Sweep threw:", e?.stack || e?.message);
+    await service.recordSweepError(e?.message || String(e)).catch(() => {});
+  }
 };

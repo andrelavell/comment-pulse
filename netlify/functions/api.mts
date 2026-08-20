@@ -49,6 +49,8 @@ export default async (req: Request, _context: Context) => {
       return json(await service.comments(pageId, { force: url.searchParams.get("force") === "1" }));
     }
 
+    let m: RegExpMatchArray | null;
+
     if (method === "GET" && path === "/overview") return json(await service.overview());
     if (method === "GET" && path === "/feedback") return json(await service.listFeedback());
     if (method === "POST" && path === "/feedback") {
@@ -63,7 +65,6 @@ export default async (req: Request, _context: Context) => {
       return json(await service.review(body.commentIds, body.reviewed));
     }
 
-    let m: RegExpMatchArray | null;
     if ((m = path.match(/^\/comments\/([^/]+)\/reply$/)) && method === "POST") {
       return json(await service.reply(m[1], body.pageId, body.message));
     }
