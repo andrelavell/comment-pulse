@@ -293,7 +293,15 @@ export default function App() {
         applyOptimistic((cs) =>
           cs.map((c) =>
             c.id === comment.id
-              ? { ...c, user_likes: payload, like_count: Math.max(0, c.like_count + (payload ? 1 : -1)) }
+              ? {
+                  ...c,
+                  user_likes: payload,
+                  like_count: Math.max(0, c.like_count + (payload ? 1 : -1)),
+                  reactions: {
+                    ...c.reactions,
+                    total: Math.max(0, (c.reactions?.total || 0) + (payload ? 1 : -1)),
+                  },
+                }
               : c
           )
         );

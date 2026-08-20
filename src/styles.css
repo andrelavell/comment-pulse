@@ -432,6 +432,8 @@ a { color: var(--ember); text-decoration: none; }
 .flag.replied { background: var(--teal-soft); color: var(--teal); }
 .flag.banned { background: var(--danger-soft); color: var(--danger); }
 .flag.autohidden { background: #eef1f6; color: var(--ink); border: 1px solid var(--line); }
+.flag.reactions { background: var(--paper); color: var(--ink-soft); }
+.reactions-row { letter-spacing: 1px; font-size: 12px; color: var(--ink-soft); }
 
 .card-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .card-tool {

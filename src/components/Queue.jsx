@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { timeAgo } from '../api.js';
 import {
-  CheckIcon, EyeIcon, EyeOffIcon, TrashIcon, ReplyIcon, RefreshIcon, SparkIcon, GearIcon, ShieldIcon,
+  CheckIcon, EyeIcon, EyeOffIcon, TrashIcon, ReplyIcon, RefreshIcon, SparkIcon, GearIcon, ShieldIcon, ThumbIcon,
 } from './icons.jsx';
 
 const FILTERS = [
@@ -156,6 +156,11 @@ export default function Queue({
                 ) : null}
                 {c.replies?.some((r) => r.isPageAuthor) && (
                   <span className="flag replied"><ReplyIcon size={12} /> replied</span>
+                )}
+                {c.reactions?.total > 0 && (
+                  <span className="flag reactions" title={`${c.reactions.total} reaction${c.reactions.total > 1 ? 's' : ''}`}>
+                    <ThumbIcon size={11} /> {c.reactions.total}
+                  </span>
                 )}
               </span>
               <span className="card-actions" onClick={(e) => e.stopPropagation()}>

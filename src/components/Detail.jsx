@@ -6,6 +6,27 @@ import {
 
 const MAX_LEN = 2000;
 
+const REACTION_EMOJI = {
+  LIKE: '\u{1F44D}', LOVE: '\u2764\uFE0F', CARE: '\u{1F970}', HAHA: '\u{1F606}',
+  WOW: '\u{1F62E}', SAD: '\u{1F622}', ANGRY: '\u{1F621}',
+};
+
+function Reactions({ reactions }) {
+  if (!reactions?.total) return null;
+  const types = Object.keys(reactions.types || {});
+  const icons = types.length
+    ? types.map((t) => REACTION_EMOJI[t] || REACTION_EMOJI.LIKE).join('')
+    : REACTION_EMOJI.LIKE;
+  const label = types.length
+    ? Object.entries(reactions.types).map(([t, n]) => `${t.toLowerCase()}: ${n}`).join(', ')
+    : `${reactions.total} reaction${reactions.total > 1 ? 's' : ''}`;
+  return (
+    <span className="reactions-row" title={label}>
+      {icons} {reactions.total}
+    </span>
+  );
+}
+
 // Cheap language sniff: only offer Translate when a comment doesn't look English.
 const EN_WORDS = new Set(
   ('the be to of and a in that have i it for not on with he as you do at this but his by from they we say her she or an will my one all would there their what so up out if about who get which go me when make can like time no just him know take people into year your good some could them see other than then now look only come its over think also back after use two how our work first well way even new want because any these give day most us are is was were been has had did does am doesn\u2019t don\u2019t won\u2019t can\u2019t hear hearing loss aids severe does anyone bought where why really'.split(/\s+/))
@@ -192,7 +213,7 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
               )}
               <div className="bubble-foot mono">
                 <TranslateButton id={comment.id} text={comment.message} />
-                {comment.like_count > 0 && <span>{comment.like_count} likes</span>}
+                <Reactions reactions={comment.reactions} />
                 {comment.permalink_url && (
                   <a href={comment.permalink_url} target="_blank" rel="noreferrer">open on Facebook <ExternalIcon size={11} /></a>
                 )}
@@ -207,9 +228,10 @@ export default function Detail({ comment, page, onAction, onAiDraft, onFeedback 
                 <div className="bubble-meta">{r.isPageAuthor ? page?.name || 'Your page' : r.from?.name || 'Facebook user'}</div>
                 <p>{r.message}</p>
                 <Translation id={r.id} />
-                {!r.isPageAuthor && (
+                {(!r.isPageAuthor || r.reactions?.total > 0) && (
                   <div className="bubble-foot mono">
-                    <TranslateButton id={r.id} text={r.message} />
+                    {!r.isPageAuthor && <TranslateButton id={r.id} text={r.message} />}
+                    <Reactions reactions={r.reactions} />
                   </div>
                 )}
               </div>

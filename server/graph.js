@@ -132,7 +132,15 @@ async function getPostMeta(storyId, token) {
 
 // ---------- Comments ----------
 const COMMENT_FIELDS =
-  'id,message,created_time,from{id,name,picture{url}},is_hidden,like_count,comment_count,can_hide,can_remove,can_like,can_comment,permalink_url,attachment,user_likes';
+  'id,message,created_time,from{id,name,picture{url}},is_hidden,like_count,comment_count,can_hide,can_remove,can_like,can_comment,permalink_url,attachment,user_likes,reactions.summary(true).limit(50){type}';
+
+// Meta redacts individual reaction entries without advanced access, but the
+// summary count is always available; keep types when they do come through.
+function slimReactions(r) {
+  const types = {};
+  for (const x of r?.data || []) types[x.type] = (types[x.type] || 0) + 1;
+  return { total: r?.summary?.total_count || 0, types };
+}
 
 export async function fetchPageComments(pageId, postsById, { maxPosts = 40 } = {}) {
   const posts = Object.values(postsById || {})
@@ -163,6 +171,7 @@ export async function fetchPageComments(pageId, postsById, { maxPosts = 40 } = {
         for (const c of comments) {
           all.push({
             ...c,
+            reactions: slimReactions(c.reactions),
             pageId,
             post: {
               id: post.storyId,
@@ -172,7 +181,11 @@ export async function fetchPageComments(pageId, postsById, { maxPosts = 40 } = {
             },
             ads: post.ads.slice(0, 3),
             adActive: post.active,
-            replies: (c.comments?.data || []).map((r) => ({ ...r, pageId })),
+            replies: (c.comments?.data || []).map((r) => ({
+              ...r,
+              pageId,
+              reactions: slimReactions(r.reactions),
+            })),
           });
         }
       } catch (e) {
