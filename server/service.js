@@ -84,7 +84,11 @@ export const service = {
   },
 
   async overview() {
-    const [state, queueIds] = await Promise.all([loadState(), kvGet('cache', 'queueIds')]);
+    const [state, queueIds, sweepStatus] = await Promise.all([
+      loadState(),
+      kvGet('cache', 'queueIds'),
+      kvGet('cache', 'sweepStatus'),
+    ]);
     const counts = {};
     for (const [pageId, info] of Object.entries(queueIds || {})) {
       counts[pageId] = {
@@ -92,7 +96,7 @@ export const service = {
         toReview: info.ids.filter((id) => !state.reviewed[id] && !state.autoHidden[id]).length,
       };
     }
-    return { counts };
+    return { counts, lastSweep: sweepStatus?.at || null };
   },
 
   async review(commentIds, reviewed) {
@@ -208,6 +212,7 @@ export const service = {
     await saveState(state);
     await kvSet('cache', 'queueIds', queueIds);
     const secs = Math.round((Date.now() - started) / 1000);
+    await kvSet('cache', 'sweepStatus', { at: Date.now(), pages: pages.length, hidden, seconds: secs });
     console.log(`Sweep done in ${secs}s across ${pages.length} enabled pages` +
       (hidden > 0 ? `, auto-hid ${hidden} comment(s)` : ''));
     return { ok: true, pages: pages.length, hidden, seconds: secs };

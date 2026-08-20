@@ -27,6 +27,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
   const [building, setBuilding] = useState(false);
+  const [lastSweep, setLastSweep] = useState(null);
   const queueTotal = useRef(0);
 
   const toast = useCallback((text, kind = 'info') => {
@@ -37,8 +38,9 @@ export default function App() {
 
   const refreshCounts = useCallback(async () => {
     try {
-      const { counts } = await api.overview();
+      const { counts, lastSweep } = await api.overview();
       setCounts((c) => ({ ...c, ...counts }));
+      setLastSweep(lastSweep);
     } catch {}
   }, []);
 
@@ -59,6 +61,7 @@ export default function App() {
       setPages(res.pages);
       setBootError(null);
       setNeedsLogin(false);
+      refreshCounts();
       if (res.pages.length && !res.pages.some((p) => p.id === pageId)) {
         setPageId(res.pages[0].id);
       }
@@ -299,6 +302,7 @@ export default function App() {
         onSelect={setPageId}
         onReload={() => boot(true)}
         reloading={reloading}
+        lastSweep={lastSweep}
       />
       <Queue
         page={page}

@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { timeAgo } from '../api.js';
 import { SearchIcon, RefreshIcon, InboxIcon } from './icons.jsx';
 
-export default function Sidebar({ pages, counts, selectedPageId, onSelect, onReload, reloading }) {
+export default function Sidebar({ pages, counts, selectedPageId, onSelect, onReload, reloading, lastSweep }) {
   const [q, setQ] = useState('');
   const filtered = pages.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()));
   const totalQueue = Object.values(counts).reduce((n, c) => n + (c?.toReview || 0), 0);
@@ -69,8 +70,15 @@ export default function Sidebar({ pages, counts, selectedPageId, onSelect, onRel
       </nav>
 
       <div className="sidebar-foot">
-        <span className="foot-dot" />
-        {totalQueue > 0 ? `${totalQueue} awaiting review` : 'Queues clear'}
+        <div className="foot-row">
+          <span className="foot-dot" />
+          {totalQueue > 0 ? `${totalQueue} awaiting review` : 'Queues clear'}
+        </div>
+        {lastSweep && (
+          <div className="foot-sync" title={new Date(lastSweep).toLocaleString()}>
+            Last auto-check {timeAgo(lastSweep)} ago
+          </div>
+        )}
       </div>
     </aside>
   );
