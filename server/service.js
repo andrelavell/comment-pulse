@@ -145,7 +145,12 @@ export const service = {
     ]);
     const comment = cached?.comments?.find((c) => c.id === commentId);
     if (!comment) throw new GraphError({ message: 'Comment not found — refresh and try again' }, 404);
-    const draft = await draftReply({ comment, instructions: state.settings.aiPrompt || '' });
+    const draft = await draftReply({
+      comment,
+      instructions: state.settings.aiPrompt || '',
+      model: state.settings.aiModel,
+      reasoning: state.settings.aiReasoning,
+    });
     return { draft };
   },
 

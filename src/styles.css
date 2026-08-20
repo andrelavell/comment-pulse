@@ -641,6 +641,61 @@ a { color: var(--ember); text-decoration: none; }
 .modal-head strong { font-family: var(--display); font-size: 17px; }
 .modal-head svg { color: var(--ember); }
 
+.modal-tabbed { width: min(560px, calc(100vw - 32px)); gap: 0; }
+.modal-tabbed .modal-head { margin-bottom: 12px; }
+
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  margin: 0 -20px;
+  padding: 0 20px;
+}
+.modal-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 10px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink-soft);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.modal-tab.active { color: var(--ember); border-bottom-color: var(--ember); }
+.modal-tab svg { opacity: 0.8; }
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 0;
+  min-height: 340px;
+}
+
+.modal-tabbed .modal-foot {
+  border-top: 1px solid var(--line);
+  margin: 0 -20px;
+  padding: 14px 20px 0;
+}
+
+.page-picker.tall { max-height: 320px; }
+
+.ai-selects { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ai-selects select {
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--ink);
+  width: 100%;
+  margin-top: 4px;
+}
+.ai-selects select:disabled { opacity: 0.5; }
+.ai-selects .field-label { display: block; }
+
 .toggle-row {
   display: flex;
   gap: 10px;

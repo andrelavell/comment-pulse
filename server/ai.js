@@ -19,7 +19,7 @@ export async function recentReplies() {
   return log.filter((r) => r.at >= cutoff);
 }
 
-export async function draftReply({ comment, instructions }) {
+export async function draftReply({ comment, instructions, model: modelSetting, reasoning }) {
   const key = env('OPENAI_API_KEY');
   if (!key) {
     throw new GraphError(
@@ -51,16 +51,18 @@ export async function draftReply({ comment, instructions }) {
     'Write only the reply text, nothing else.',
   ].filter(Boolean).join('\n\n');
 
-  const model = env('OPENAI_MODEL') || 'gpt-5';
+  const model = modelSetting || env('OPENAI_MODEL') || 'gpt-5';
   const body = {
     model,
     messages: [
       { role: 'system', content: instructions },
       { role: 'user', content: user },
     ],
-    max_completion_tokens: 2000,
+    max_completion_tokens: 4000,
   };
-  if (model.startsWith('gpt-5')) body.reasoning_effort = 'low'; // keep drafts fast
+  if (model.startsWith('gpt-5') || model.startsWith('o')) {
+    body.reasoning_effort = reasoning || 'low';
+  }
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',

@@ -15,7 +15,14 @@ const EMPTY = () => ({
   reviewed: {},
   banned: {},
   autoHidden: {},
-  settings: { autoHide: true, keywords: DEFAULT_KEYWORDS, enabledPages: DEFAULT_PAGES, aiPrompt: '' },
+  settings: {
+    autoHide: true,
+    keywords: DEFAULT_KEYWORDS,
+    enabledPages: DEFAULT_PAGES,
+    aiPrompt: '',
+    aiModel: 'gpt-5',
+    aiReasoning: 'low',
+  },
 });
 
 export async function loadState() {
@@ -40,5 +47,9 @@ export function normalizeSettings(settings) {
       .filter(Boolean),
     enabledPages: [...new Set((settings.enabledPages || []).map(String).filter(Boolean))],
     aiPrompt: String(settings.aiPrompt || '').slice(0, 8000),
+    aiModel: String(settings.aiModel || 'gpt-5').trim(),
+    aiReasoning: ['minimal', 'low', 'medium', 'high'].includes(settings.aiReasoning)
+      ? settings.aiReasoning
+      : 'low',
   };
 }
