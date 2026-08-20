@@ -1,0 +1,291 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api } from './api.js';
+import Sidebar from './components/Sidebar.jsx';
+import Queue from './components/Queue.jsx';
+import Detail from './components/Detail.jsx';
+import Settings from './components/Settings.jsx';
+
+let toastId = 0;
+
+export default function App() {
+  const [pages, setPages] = useState([]);
+  const [counts, setCounts] = useState({});
+  const [bootError, setBootError] = useState(null);
+  const [booting, setBooting] = useState(true);
+  const [reloading, setReloading] = useState(false);
+
+  const [pageId, setPageId] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState('review');
+  const [filter, setFilter] = useState('all');
+  const [selectedId, setSelectedId] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [toasts, setToasts] = useState([]);
+  const [sweeping, setSweeping] = useState(new Set());
+  const [settings, setSettings] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const queueTotal = useRef(0);
+
+  const toast = useCallback((text, kind = 'info') => {
+    const id = ++toastId;
+    setToasts((t) => [...t, { id, text, kind }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
+  }, []);
+
+  const refreshCounts = useCallback(async () => {
+    try {
+      const { counts } = await api.overview();
+      setCounts((c) => ({ ...c, ...counts }));
+    } catch {}
+  }, []);
+
+  const boot = useCallback(async (force = false) => {
+    setReloading(true);
+    try {
+      const { pages } = await api.bootstrap(force);
+      setPages(pages);
+      setBootError(null);
+      if (pages.length && !pageId) setPageId(pages[0].id);
+    } catch (e) {
+      setBootError(e.message);
+    } finally {
+      setBooting(false);
+      setReloading(false);
+    }
+  }, [pageId]);
+
+  useEffect(() => {
+    boot();
+    api.settings().then(setSettings).catch(() => {});
+  }, []); // eslint-disable-line
+
+  const saveSettings = async (next) => {
+    try {
+      const saved = await api.saveSettings(next);
+      setSettings(saved);
+      setSettingsOpen(false);
+      toast(saved.autoHide ? 'Auto-hide is on — new matching comments will be hidden' : 'Auto-hide is off');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  const loadComments = useCallback(async (pid, force = false) => {
+    setLoading(true);
+    try {
+      const { comments } = await api.comments(pid, force);
+      setComments(comments);
+      const toReview = comments.filter((c) => !c.reviewed).length;
+      queueTotal.current = Math.max(toReview, queueTotal.current && !force ? queueTotal.current : toReview);
+      setCounts((c) => ({ ...c, [pid]: { total: comments.length, toReview } }));
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (!pageId) return;
+    setComments([]);
+    setSelectedId(null);
+    queueTotal.current = 0;
+    loadComments(pageId);
+  }, [pageId, loadComments]);
+
+  useEffect(() => {
+    const t = setInterval(refreshCounts, 60000);
+    return () => clearInterval(t);
+  }, [refreshCounts]);
+
+  // Pull fresh comments for the open page every 15 minutes, matching the
+  // server's background auto-hide sweep.
+  useEffect(() => {
+    if (!pageId) return;
+    const t = setInterval(() => loadComments(pageId), 15 * 60 * 1000);
+    return () => clearInterval(t);
+  }, [pageId, loadComments]);
+
+  const page = useMemo(() => pages.find((p) => p.id === pageId), [pages, pageId]);
+  const selected = useMemo(() => comments.find((c) => c.id === selectedId), [comments, selectedId]);
+
+  const patch = (id, changes) =>
+    setComments((cs) => cs.map((c) => (c.id === id ? { ...c, ...changes } : c)));
+
+  const syncCount = (list) =>
+    setCounts((c) => ({
+      ...c,
+      [pageId]: {
+        total: list.length,
+        toReview: list.filter((x) => !x.reviewed && !x.autoHidden).length,
+      },
+    }));
+
+  const sweepThen = (id, fn) => {
+    setSweeping((s) => new Set(s).add(id));
+    setTimeout(() => {
+      setSweeping((s) => { const n = new Set(s); n.delete(id); return n; });
+      fn();
+    }, 260);
+  };
+
+  const handleReview = async (comment, reviewed) => {
+    try {
+      await api.review([comment.id], reviewed);
+      if (reviewed && tab === 'review') sweepThen(comment.id, () => patch(comment.id, { reviewed }));
+      else patch(comment.id, { reviewed });
+      setComments((cs) => {
+        const next = cs.map((c) => (c.id === comment.id ? { ...c, reviewed } : c));
+        syncCount(next);
+        return next;
+      });
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  const handleReviewAll = async (list) => {
+    try {
+      await api.review(list.map((c) => c.id), true);
+      const ids = new Set(list.map((c) => c.id));
+      setComments((cs) => {
+        const next = cs.map((c) => (ids.has(c.id) ? { ...c, reviewed: true } : c));
+        syncCount(next);
+        return next;
+      });
+      toast(`${list.length} comments marked reviewed`);
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  const handleAction = async (type, comment, payload) => {
+    setBusy(true);
+    try {
+      switch (type) {
+        case 'review':
+          await handleReview(comment, payload);
+          break;
+        case 'reply': {
+          const { id } = await api.reply(comment.id, pageId, payload);
+          if (!comment.reviewed) await api.review([comment.id], true);
+          setComments((cs) => {
+            const next = cs.map((c) =>
+              c.id === comment.id
+                ? {
+                    ...c,
+                    reviewed: true,
+                    replies: [
+                      ...(c.replies || []),
+                      { id: id || `tmp_${Date.now()}`, message: payload, isPageAuthor: true, from: { name: page?.name } },
+                    ],
+                  }
+                : c
+            );
+            syncCount(next);
+            return next;
+          });
+          toast('Reply sent and marked reviewed');
+          break;
+        }
+        case 'hide':
+          await api.hide(comment.id, pageId, payload);
+          patch(comment.id, { is_hidden: payload });
+          toast(payload ? 'Comment hidden from the public' : 'Comment is visible again');
+          break;
+        case 'delete':
+          await api.remove(comment.id, pageId);
+          setComments((cs) => {
+            const next = cs.filter((c) => c.id !== comment.id);
+            syncCount(next);
+            return next;
+          });
+          setSelectedId(null);
+          toast('Comment deleted');
+          break;
+        case 'ban':
+          await api.ban(pageId, comment.from.id, payload);
+          setComments((cs) =>
+            cs.map((c) => (c.from?.id === comment.from.id ? { ...c, authorBanned: payload } : c))
+          );
+          toast(payload ? `${comment.from.name || 'User'} banned from ${page?.name}` : 'User unbanned');
+          break;
+        case 'like':
+          await api.like(comment.id, pageId, payload);
+          patch(comment.id, {
+            user_likes: payload,
+            like_count: Math.max(0, comment.like_count + (payload ? 1 : -1)),
+          });
+          break;
+      }
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (booting) {
+    return (
+      <div className="boot">
+        <span className="loader lg" />
+        <strong>Syncing your pages and ads…</strong>
+        <p>First load walks every ad account to find posts with comments. Give it a moment.</p>
+      </div>
+    );
+  }
+
+  if (bootError) {
+    return (
+      <div className="boot">
+        <strong>Couldn't reach Meta</strong>
+        <p>{bootError}</p>
+        <button className="pill-btn primary" onClick={() => boot(true)}>Try again</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="shell">
+      <Sidebar
+        pages={pages}
+        counts={counts}
+        selectedPageId={pageId}
+        onSelect={setPageId}
+        onReload={() => boot(true)}
+        reloading={reloading}
+      />
+      <Queue
+        page={page}
+        comments={comments}
+        tab={tab}
+        setTab={setTab}
+        filter={filter}
+        setFilter={setFilter}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        onReview={handleReview}
+        onReviewAll={handleReviewAll}
+        onRefresh={() => loadComments(pageId, true)}
+        loading={loading}
+        queueTotal={queueTotal.current}
+        sweeping={sweeping}
+        busy={busy}
+        onQuickAction={handleAction}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
+      <Detail comment={selected} page={page} busy={busy} onAction={handleAction} />
+
+      {settingsOpen && settings && (
+        <Settings settings={settings} onSave={saveSettings} onClose={() => setSettingsOpen(false)} />
+      )}
+
+      <div className="toasts" role="status">
+        {toasts.map((t) => (
+          <div key={t.id} className={`toast ${t.kind}`}>{t.text}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
