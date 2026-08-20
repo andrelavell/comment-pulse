@@ -19,6 +19,31 @@ export async function recentReplies() {
   return log.filter((r) => r.at >= cutoff);
 }
 
+const FEEDBACK_KEY = 'aiFeedback';
+
+// Standing corrections: saved once, served in every prompt until deleted.
+export async function listFeedback() {
+  return (await kvGet('moderation', FEEDBACK_KEY)) || [];
+}
+
+export async function addFeedback({ highlight, feedback }) {
+  const list = await listFeedback();
+  const entry = {
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    at: Date.now(),
+    highlight: String(highlight || '').slice(0, 500),
+    feedback: String(feedback || '').slice(0, 1000),
+  };
+  list.push(entry);
+  await kvSet('moderation', FEEDBACK_KEY, list);
+  return entry;
+}
+
+export async function deleteFeedback(id) {
+  const list = await listFeedback();
+  await kvSet('moderation', FEEDBACK_KEY, list.filter((f) => f.id !== id));
+}
+
 export async function draftReply({ comment, instructions, model: modelSetting, reasoning }) {
   const key = env('OPENAI_API_KEY');
   if (!key) {
@@ -43,6 +68,16 @@ export async function draftReply({ comment, instructions, model: modelSetting, r
         .join('\n')}`
     : '';
 
+  // Standing corrections from past feedback, always appended to the prompt.
+  const feedback = await listFeedback();
+  const feedbackBlock = feedback.length
+    ? `\n\nStanding corrections from the brand — ALWAYS follow these:\n${feedback
+        .map((f) =>
+          `- ${f.feedback}${f.highlight ? ` (this was given about a past draft that said: "${f.highlight.slice(0, 200)}")` : ''}`
+        )
+        .join('\n')}`
+    : '';
+
   // The system prompt comes entirely from Settings; code only supplies the data.
   const user = [
     comment.post?.message ? `The ad post being commented on:\n"""${comment.post.message.slice(0, 800)}"""` : '',
@@ -55,7 +90,7 @@ export async function draftReply({ comment, instructions, model: modelSetting, r
   const body = {
     model,
     messages: [
-      { role: 'system', content: instructions },
+      { role: 'system', content: instructions + feedbackBlock },
       { role: 'user', content: user },
     ],
     max_completion_tokens: 4000,

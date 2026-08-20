@@ -50,6 +50,13 @@ export default async (req: Request, _context: Context) => {
     }
 
     if (method === "GET" && path === "/overview") return json(await service.overview());
+    if (method === "GET" && path === "/feedback") return json(await service.listFeedback());
+    if (method === "POST" && path === "/feedback") {
+      return json(await service.addFeedback(body.highlight, body.feedback));
+    }
+    if ((m = path.match(/^\/feedback\/([^/]+)$/)) && method === "DELETE") {
+      return json(await service.deleteFeedback(m[1]));
+    }
     if (method === "GET" && path === "/settings") return json(await service.getSettings());
     if (method === "POST" && path === "/settings") return json(await service.saveSettings(body));
     if (method === "POST" && path === "/review") {

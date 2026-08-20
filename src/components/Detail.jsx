@@ -14,17 +14,37 @@ function Avatar({ from, size = '' }) {
   );
 }
 
-export default function Detail({ comment, page, onAction, onAiDraft }) {
+export default function Detail({ comment, page, onAction, onAiDraft, onFeedback }) {
   const [reply, setReply] = useState('');
   const [confirm, setConfirm] = useState(null); // 'delete' | 'ban' | null
   const [drafting, setDrafting] = useState(false);
+  const [sel, setSel] = useState('');
+  const [fbOpen, setFbOpen] = useState(false);
+  const [fbText, setFbText] = useState('');
   const replyRef = useRef(null);
 
   useEffect(() => {
     setReply('');
     setConfirm(null);
     setDrafting(false);
+    setSel('');
+    setFbOpen(false);
+    setFbText('');
   }, [comment?.id]);
+
+  const handleSelect = (e) => {
+    if (fbOpen) return;
+    const { selectionStart, selectionEnd, value } = e.target;
+    setSel(value.slice(selectionStart, selectionEnd).trim());
+  };
+
+  const saveFeedback = async () => {
+    if (!fbText.trim()) return;
+    await onFeedback(sel, fbText.trim());
+    setSel('');
+    setFbOpen(false);
+    setFbText('');
+  };
 
   const draftWithAi = async () => {
     setDrafting(true);
@@ -192,6 +212,7 @@ export default function Detail({ comment, page, onAction, onAiDraft }) {
           rows={2}
           disabled={!comment.can_comment}
           onChange={(e) => setReply(e.target.value)}
+          onSelect={handleSelect}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && reply.trim()) {
               act('reply', reply.trim());
@@ -199,6 +220,32 @@ export default function Detail({ comment, page, onAction, onAiDraft }) {
             }
           }}
         />
+        {(sel || fbOpen) && (
+          <div className="feedback-bar">
+            <span className="feedback-snippet" title={sel}>
+              “{sel.slice(0, 70)}{sel.length > 70 ? '…' : ''}”
+            </span>
+            {!fbOpen ? (
+              <button className="link-btn" onClick={() => setFbOpen(true)}>Give feedback</button>
+            ) : (
+              <>
+                <input
+                  className="feedback-input"
+                  autoFocus
+                  value={fbText}
+                  placeholder={'e.g. Never say it\u2019s manufactured overseas'}
+                  onChange={(e) => setFbText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveFeedback();
+                    if (e.key === 'Escape') { setFbOpen(false); setFbText(''); }
+                  }}
+                />
+                <button className="link-btn" disabled={!fbText.trim()} onClick={saveFeedback}>Save</button>
+                <button className="link-btn muted" onClick={() => { setFbOpen(false); setFbText(''); }}>Cancel</button>
+              </>
+            )}
+          </div>
+        )}
         <div className="composer-foot">
           <button
             className="pill-btn ghost ai-btn"

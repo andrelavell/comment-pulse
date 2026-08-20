@@ -336,6 +336,15 @@ export default function App() {
             return null;
           }
         }}
+        onFeedback={async (highlight, feedback) => {
+          try {
+            await api.addFeedback(highlight, feedback);
+            toast('Feedback saved — every future AI draft will follow it');
+          } catch (e) {
+            if (e.authRequired) setNeedsLogin(true);
+            else toast(e.message, 'error');
+          }
+        }}
       />
 
       {settingsOpen && settings && (

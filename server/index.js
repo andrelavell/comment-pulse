@@ -57,6 +57,12 @@ app.post('/api/comments/:id/like', wrap(async (req, res) =>
 app.post('/api/pages/:pageId/ban', wrap(async (req, res) =>
   res.json(await service.ban(req.params.pageId, req.body.userId, req.body.banned))));
 
+app.get('/api/feedback', wrap(async (_req, res) => res.json(await service.listFeedback())));
+app.post('/api/feedback', wrap(async (req, res) =>
+  res.json(await service.addFeedback(req.body.highlight, req.body.feedback))));
+app.delete('/api/feedback/:id', wrap(async (req, res) =>
+  res.json(await service.deleteFeedback(req.params.id))));
+
 app.get('/api/settings', wrap(async (_req, res) => res.json(await service.getSettings())));
 app.post('/api/settings', wrap(async (req, res) => res.json(await service.saveSettings(req.body))));
 

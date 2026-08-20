@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { api } from '../api.js';
 import { ShieldIcon, SparkIcon, InboxIcon, GearIcon } from './icons.jsx';
 
 const MODELS = [
@@ -20,6 +21,7 @@ const TABS = [
   { id: 'pages', label: 'Pages', icon: InboxIcon },
   { id: 'autohide', label: 'Auto-hide', icon: ShieldIcon },
   { id: 'ai', label: 'AI replies', icon: SparkIcon },
+  { id: 'feedback', label: 'Feedback', icon: GearIcon },
 ];
 
 export default function Settings({ settings, onSave, onClose }) {
@@ -30,6 +32,20 @@ export default function Settings({ settings, onSave, onClose }) {
   const [aiPrompt, setAiPrompt] = useState(settings.aiPrompt || '');
   const [aiModel, setAiModel] = useState(settings.aiModel || 'gpt-5');
   const [aiReasoning, setAiReasoning] = useState(settings.aiReasoning || 'low');
+  const [feedback, setFeedback] = useState(null);
+
+  useEffect(() => {
+    api.feedback().then(({ feedback }) => setFeedback(feedback)).catch(() => setFeedback([]));
+  }, []);
+
+  const removeFeedback = async (id) => {
+    setFeedback((f) => f.filter((x) => x.id !== id));
+    try {
+      await api.deleteFeedback(id);
+    } catch {
+      api.feedback().then(({ feedback }) => setFeedback(feedback)).catch(() => {});
+    }
+  };
 
   const keywords = text.split('\n').map((k) => k.trim()).filter(Boolean);
   const allPages = settings.allPages || [];
@@ -170,6 +186,47 @@ export default function Settings({ settings, onSave, onClose }) {
                 placeholder={'Example:\nWe sell OTC hearing aids ($249, 45-day returns, free US shipping).\nTone: warm, helpful, concise. For support issues point to support@ourbrand.com.\nNever promise discounts or medical outcomes.'}
                 spellCheck={false}
               />
+            </>
+          )}
+          {tab === 'feedback' && (
+            <>
+              <div className="field-label">
+                AI feedback {feedback && <span className="tab-n">{feedback.length}</span>}
+                <small>
+                  Standing corrections you've given by highlighting AI drafts. Each one is
+                  served with every future draft until you remove it.
+                </small>
+              </div>
+              {!feedback ? (
+                <p className="profile-note">Loading…</p>
+              ) : feedback.length === 0 ? (
+                <p className="profile-note">
+                  No feedback yet. Highlight part of an AI draft in the reply box and click
+                  "Give feedback" to add your first correction.
+                </p>
+              ) : (
+                <div className="feedback-list">
+                  {[...feedback].reverse().map((f) => (
+                    <div key={f.id} className="feedback-item">
+                      <div className="feedback-item-body">
+                        <strong>{f.feedback}</strong>
+                        {f.highlight && (
+                          <span className="feedback-item-quote">re: “{f.highlight.slice(0, 120)}{f.highlight.length > 120 ? '…' : ''}”</span>
+                        )}
+                        <span className="mono">{new Date(f.at).toLocaleDateString()}</span>
+                      </div>
+                      <button
+                        className="feedback-x"
+                        title="Remove this feedback"
+                        aria-label="Remove this feedback"
+                        onClick={() => removeFeedback(f.id)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>

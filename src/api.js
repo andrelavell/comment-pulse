@@ -32,6 +32,10 @@ export const api = {
     req(`/api/comments/${commentId}/like`, { method: 'POST', body: { pageId, liked } }),
   ban: (pageId, userId, banned) =>
     req(`/api/pages/${pageId}/ban`, { method: 'POST', body: { userId, banned } }),
+  feedback: () => req('/api/feedback'),
+  addFeedback: (highlight, feedback) =>
+    req('/api/feedback', { method: 'POST', body: { highlight, feedback } }),
+  deleteFeedback: (id) => req(`/api/feedback/${id}`, { method: 'DELETE' }),
   settings: () => req('/api/settings'),
   saveSettings: (settings) => req('/api/settings', { method: 'POST', body: settings }),
 };
