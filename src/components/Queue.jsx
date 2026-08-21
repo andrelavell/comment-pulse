@@ -325,13 +325,14 @@ export default function Queue({
                 {c.ads[0]?.name || 'Page post'}
               </span>
               <span className="card-flags">
-                {c.autoHidden ? (
+                {c.autoHidden && (
                   <span className="flag autohidden" title={`Matched "${c.autoHidden.keyword}"`}>
                     <ShieldIcon size={12} /> {c.autoHidden.keyword}
                   </span>
-                ) : c.is_hidden ? (
+                )}
+                {c.is_hidden && (
                   <span className="flag hiddenf"><EyeOffIcon size={12} /> hidden</span>
-                ) : null}
+                )}
                 {c.replies?.some((r) => r.isPageAuthor) && (
                   <span className="flag replied"><ReplyIcon size={12} /> replied</span>
                 )}

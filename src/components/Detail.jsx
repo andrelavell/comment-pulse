@@ -242,11 +242,12 @@ export default function Detail({ comment, page, notify, onBack, onAction, onAiDr
             <div className="bubble">
               <div className="bubble-meta">
                 {author}
-                {comment.autoHidden ? (
+                {comment.autoHidden && (
                   <span className="flag autohidden">auto-hidden · matched "{comment.autoHidden.keyword}"</span>
-                ) : comment.is_hidden ? (
+                )}
+                {comment.is_hidden && (
                   <span className="flag hiddenf"><EyeOffIcon size={11} /> hidden from public</span>
-                ) : null}
+                )}
                 {comment.authorBanned && <span className="flag banned"><BanIcon size={11} /> banned</span>}
               </div>
               <p>{comment.message || <em>(no text)</em>}</p>
