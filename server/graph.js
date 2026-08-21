@@ -149,23 +149,32 @@ export async function fetchPageComments(pageId, postsById, { maxPosts = 40, maxO
 
   const token = await pageToken(pageId);
 
-  // Organic page posts aren't in the ad index, but their comments still need
-  // moderating. Pull the most recent published posts and add any not already
-  // covered by an ad.
-  try {
-    const organic = await gAll(
-      `${pageId}/published_posts`,
-      { fields: 'id,created_time', limit: 100 },
-      token,
-      1
-    );
-    const seen = new Set(posts.map((p) => p.storyId));
-    for (const p of organic.slice(0, maxOrganic)) {
+  // The ad-account index misses two kinds of posts: organic page posts, and
+  // dark posts run from ad accounts this token can't see (e.g. another
+  // business advertising with this page's identity). published_posts covers
+  // the former; ads_posts covers the latter but needs the pages_manage_ads
+  // permission — it fails gracefully until the token has it.
+  const seen = new Set(posts.map((p) => p.storyId));
+  const addExtra = (list, max) => {
+    for (const p of list.slice(0, max)) {
       if (seen.has(p.id)) continue;
+      seen.add(p.id);
       posts.push({ storyId: p.id, ads: [], active: false, lastUpdated: p.created_time || '' });
     }
-  } catch (e) {
-    console.warn(`Organic posts fetch failed for ${pageId}: ${e.message}`);
+  };
+  const extraSources = [
+    ['published_posts', maxOrganic],
+    ['ads_posts', 50],
+  ];
+  for (const [edge, max] of extraSources) {
+    try {
+      addExtra(
+        await gAll(`${pageId}/${edge}`, { fields: 'id,created_time', limit: 100 }, token, 1),
+        max
+      );
+    } catch (e) {
+      console.warn(`${edge} fetch failed for ${pageId}: ${e.message}`);
+    }
   }
   const all = [];
   const queue = [...posts];
