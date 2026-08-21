@@ -163,13 +163,15 @@ export async function fetchPageComments(pageId, postsById, { maxPosts = 40, maxO
     }
   };
   const extraSources = [
-    ['published_posts', maxOrganic],
-    ['ads_posts', 50],
+    ['published_posts', {}, maxOrganic],
+    // include_inline_create surfaces dark posts created by ads (e.g. flexible
+    // format variants), which never appear on the page timeline.
+    ['ads_posts', { include_inline_create: true }, 60],
   ];
-  for (const [edge, max] of extraSources) {
+  for (const [edge, extraParams, max] of extraSources) {
     try {
       addExtra(
-        await gAll(`${pageId}/${edge}`, { fields: 'id,created_time', limit: 100 }, token, 1),
+        await gAll(`${pageId}/${edge}`, { fields: 'id,created_time', limit: 100, ...extraParams }, token, 1),
         max
       );
     } catch (e) {
@@ -223,8 +225,25 @@ export async function fetchPageComments(pageId, postsById, { maxPosts = 40, maxO
   }
   await Promise.all(Array.from({ length: 5 }, worker));
   all.sort((a, b) => b.created_time.localeCompare(a.created_time));
-  for (const c of all) delete c.comments;
-  return all;
+  // Ad variant posts can share one comment stream, so the same comment can
+  // arrive under several post ids. Keep one copy, preferring the entry that
+  // carries ad context.
+  const byId = new Map();
+  const deduped = [];
+  for (const c of all) {
+    delete c.comments;
+    const prev = byId.get(c.id);
+    if (prev) {
+      if (!prev.ads.length && c.ads.length) {
+        prev.ads = c.ads;
+        prev.adActive = c.adActive;
+      }
+      continue;
+    }
+    byId.set(c.id, c);
+    deduped.push(c);
+  }
+  return deduped;
 }
 
 // ---------- Actions (all executed as the page) ----------
