@@ -213,7 +213,9 @@ export default function Detail({ comment, page, notify, onAction, onAiDraft, onF
         <div className="creative-card">
           {comment.post.picture && <img src={comment.post.picture} alt="" />}
           <div className="creative-card-body">
-            <span className="creative-card-label">Ad post · {comment.ads[0]?.account || page?.name}</span>
+            <span className="creative-card-label">
+              {comment.ads.length ? `Ad post · ${comment.ads[0]?.account || page?.name}` : `Page post · ${page?.name || ''}`}
+            </span>
             <p>{comment.post.message ? comment.post.message.slice(0, 180) + (comment.post.message.length > 180 ? '…' : '') : 'Untitled ad post'}</p>
             <div className="creative-card-meta">
               {comment.ads.map((a) => (

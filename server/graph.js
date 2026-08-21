@@ -142,12 +142,31 @@ function slimReactions(r) {
   return { total: r?.summary?.total_count || 0, types };
 }
 
-export async function fetchPageComments(pageId, postsById, { maxPosts = 40 } = {}) {
+export async function fetchPageComments(pageId, postsById, { maxPosts = 40, maxOrganic = 25 } = {}) {
   const posts = Object.values(postsById || {})
     .sort((a, b) => (b.active - a.active) || b.lastUpdated.localeCompare(a.lastUpdated))
     .slice(0, maxPosts);
 
   const token = await pageToken(pageId);
+
+  // Organic page posts aren't in the ad index, but their comments still need
+  // moderating. Pull the most recent published posts and add any not already
+  // covered by an ad.
+  try {
+    const organic = await gAll(
+      `${pageId}/published_posts`,
+      { fields: 'id,created_time', limit: 100 },
+      token,
+      1
+    );
+    const seen = new Set(posts.map((p) => p.storyId));
+    for (const p of organic.slice(0, maxOrganic)) {
+      if (seen.has(p.id)) continue;
+      posts.push({ storyId: p.id, ads: [], active: false, lastUpdated: p.created_time || '' });
+    }
+  } catch (e) {
+    console.warn(`Organic posts fetch failed for ${pageId}: ${e.message}`);
+  }
   const all = [];
   const queue = [...posts];
   async function worker() {

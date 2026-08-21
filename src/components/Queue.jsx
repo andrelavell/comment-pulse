@@ -60,6 +60,7 @@ export default function Queue({
     for (const c of comments) for (const a of c.ads || []) if (!map.has(a.id)) map.set(a.id, a.name);
     return [...map.entries()];
   }, [comments]);
+  const hasOrganic = useMemo(() => comments.some((c) => !c.ads?.length), [comments]);
 
   const q = query.trim().toLowerCase();
   const cutoff = dateFilter === 'any' ? 0 : Date.now() - Number(dateFilter) * 86400000;
@@ -74,7 +75,9 @@ export default function Queue({
     if (filter === 'questions' && !(c.message || '').includes('?')) return false;
     if (filter === 'unanswered' && c.replies?.some((r) => r.isPageAuthor)) return false;
     if (filter === 'reactions' && !(c.reactions?.total > 0)) return false;
-    if (adFilter !== 'all' && !c.ads?.some((a) => a.id === adFilter)) return false;
+    if (adFilter === 'organic') {
+      if (c.ads?.length) return false;
+    } else if (adFilter !== 'all' && !c.ads?.some((a) => a.id === adFilter)) return false;
     if (cutoff && new Date(c.created_time).getTime() < cutoff) return false;
     if (q) {
       const hay = `${c.message || ''} ${c.from?.name || ''} ${(c.ads || []).map((a) => a.name).join(' ')}`.toLowerCase();
@@ -241,9 +244,10 @@ export default function Queue({
               <option key={d.id} value={d.id}>{d.label}</option>
             ))}
           </select>
-          {ads.length > 1 && (
+          {(ads.length > 1 || (ads.length > 0 && hasOrganic)) && (
             <select value={adFilter} onChange={(e) => setAdFilter(e.target.value)} aria-label="Filter by ad" className="ad-filter-select">
-              <option value="all">All ads</option>
+              <option value="all">All posts</option>
+              {hasOrganic && <option value="organic">Organic posts</option>}
               {ads.map(([id, name]) => (
                 <option key={id} value={id}>{name}</option>
               ))}
@@ -313,9 +317,9 @@ export default function Queue({
             </div>
             <p className="card-msg">{c.message || <em>(no text — sticker or photo)</em>}</p>
             <div className="card-foot">
-              <span className="creative-chip" title={c.ads.map((a) => a.name).join(', ')}>
+              <span className="creative-chip" title={c.ads.length ? c.ads.map((a) => a.name).join(', ') : 'Organic page post'}>
                 {c.adActive && <span className="live-dot" />}
-                {c.ads[0]?.name || 'Ad post'}
+                {c.ads[0]?.name || 'Page post'}
               </span>
               <span className="card-flags">
                 {c.autoHidden ? (
