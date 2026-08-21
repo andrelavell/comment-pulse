@@ -15,14 +15,12 @@ function localFile(storeName, key) {
   return path.join(localDir, storeName, `${key.replaceAll('/', '__')}.json`);
 }
 
-let blobStores = null;
+// Never cache store instances: they embed an auth token that expires while a
+// function instance stays warm, causing "Failed to decode token: Token expired"
+// 500s. getStore() is a cheap local call, so create one per operation.
 async function blobStore(name) {
-  if (!blobStores) blobStores = new Map();
-  if (!blobStores.has(name)) {
-    const { getStore } = await import('@netlify/blobs');
-    blobStores.set(name, getStore({ name, consistency: 'strong' }));
-  }
-  return blobStores.get(name);
+  const { getStore } = await import('@netlify/blobs');
+  return getStore({ name, consistency: 'strong' });
 }
 
 export async function kvGet(storeName, key) {
