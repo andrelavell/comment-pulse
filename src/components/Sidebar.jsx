@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { timeAgo } from '../api.js';
 import { SearchIcon, RefreshIcon, InboxIcon } from './icons.jsx';
 
-export default function Sidebar({ pages, counts, selectedPageId, onSelect, onReload, reloading, lastSweep }) {
+export default function Sidebar({ pages, counts, selectedPageId, onSelect, onReload, reloading, lastSweep, open, onClose }) {
   const [q, setQ] = useState('');
   const filtered = pages.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()));
   const totalQueue = Object.values(counts).reduce((n, c) => n + (c?.toReview || 0), 0);
 
   return (
-    <aside className="sidebar">
+    <>
+    {open && <div className="sidebar-backdrop" onClick={onClose} aria-hidden="true" />}
+    <aside className={`sidebar ${open ? 'open' : ''}`}>
       <div className="sidebar-brand">
         <div className="brand-mark"><InboxIcon size={18} /></div>
         <div>
@@ -46,7 +48,7 @@ export default function Sidebar({ pages, counts, selectedPageId, onSelect, onRel
             <button
               key={p.id}
               className={`page-item ${p.id === selectedPageId ? 'active' : ''}`}
-              onClick={() => onSelect(p.id)}
+              onClick={() => { onSelect(p.id); onClose?.(); }}
             >
               {p.picture?.data?.url ? (
                 <img className="avatar" src={p.picture.data.url} alt="" />
@@ -81,5 +83,6 @@ export default function Sidebar({ pages, counts, selectedPageId, onSelect, onRel
         )}
       </div>
     </aside>
+    </>
   );
 }

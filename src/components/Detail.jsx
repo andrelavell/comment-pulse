@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, fullTime } from '../api.js';
 import {
-  CheckIcon, ReplyIcon, EyeIcon, EyeOffIcon, TrashIcon, BanIcon, ThumbIcon, ExternalIcon, SparkIcon, BookmarkIcon,
+  CheckIcon, ReplyIcon, EyeIcon, EyeOffIcon, TrashIcon, BanIcon, ThumbIcon, ExternalIcon, SparkIcon, BookmarkIcon, BackIcon,
 } from './icons.jsx';
 
 const MAX_LEN = 2000;
@@ -53,7 +53,7 @@ function Avatar({ from, size = '' }) {
   );
 }
 
-export default function Detail({ comment, page, notify, onAction, onAiDraft, onFeedback }) {
+export default function Detail({ comment, page, notify, onBack, onAction, onAiDraft, onFeedback }) {
   const [reply, setReply] = useState('');
   const [confirm, setConfirm] = useState(null); // 'delete' | 'ban' | null
   const [drafting, setDrafting] = useState(false);
@@ -194,6 +194,9 @@ export default function Detail({ comment, page, notify, onAction, onAiDraft, onF
   return (
     <section className="detail">
       <header className="detail-head">
+        <button className="icon-btn mobile-only detail-back" onClick={onBack} title="Back to queue" aria-label="Back to queue">
+          <BackIcon size={17} />
+        </button>
         <Avatar from={comment.from} />
         <div className="detail-head-id">
           <strong>{author}</strong>

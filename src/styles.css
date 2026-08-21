@@ -1154,15 +1154,113 @@ a { color: var(--ember); text-decoration: none; }
 .activity-when { font-size: 11px; color: var(--ink-faint); }
 
 /* ---------- responsive ---------- */
+.mobile-only { display: none !important; }
+
 @media (max-width: 1100px) {
   .shell { grid-template-columns: 210px minmax(300px, 340px) 1fr; }
 }
-@media (max-width: 860px) {
+@media (max-width: 860px) and (min-width: 721px) {
   .shell { grid-template-columns: 64px minmax(280px, 1fr) 1fr; }
   .sidebar .brand-name, .sidebar .brand-sub, .sidebar-search, .sidebar-section span,
   .page-name, .sidebar-foot { display: none; }
   .page-item { justify-content: center; padding: 8px 4px; }
   .count-pill { display: none; }
+}
+
+/* ---------- mobile ---------- */
+@media (max-width: 720px) {
+  .mobile-only { display: inline-flex !important; }
+
+  .shell {
+    display: block;
+    height: 100dvh;
+  }
+
+  /* Sidebar becomes a slide-in drawer */
+  .sidebar {
+    position: fixed;
+    top: 0; bottom: 0; left: 0;
+    width: min(300px, 82vw);
+    z-index: 60;
+    transform: translateX(-102%);
+    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 12px 0 40px rgba(23, 35, 58, 0.35);
+  }
+  .sidebar.open { transform: none; }
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(23, 35, 58, 0.5);
+    z-index: 55;
+    animation: toast-in 0.2s ease-out;
+  }
+
+  /* Queue and detail swap as full-screen views */
+  .queue {
+    height: 100dvh;
+    border-right: none;
+  }
+  .shell.detail-open .queue { display: none; }
+  .detail { display: none; }
+  .shell.detail-open .detail {
+    display: flex;
+    height: 100dvh;
+  }
+
+  .queue-head { gap: 8px; padding: 12px 12px 8px; }
+  .queue-head h1 {
+    flex: 1;
+    min-width: 0;
+    font-size: 17px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tabs { padding: 0 12px; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { white-space: nowrap; }
+  .queue-bar, .select-bar { padding: 8px 12px; }
+  .queue-tools { padding: 0 12px 8px; }
+  .card-list { padding: 4px 10px 16px; }
+
+  /* Detail pane */
+  .detail-head { padding: 10px 12px; gap: 8px; }
+  .detail-head-id strong { font-size: 14px; }
+  .detail-scroll { padding: 12px; }
+  .creative-card img { width: 72px; height: 72px; }
+  .mod-bar { padding: 8px 12px 0; flex-wrap: wrap; }
+  .tool-btn { padding: 6px 10px; font-size: 12px; }
+  .composer { margin: 8px 12px 12px; }
+  .composer-foot { flex-wrap: wrap; gap: 8px; }
+  .confirm-bar { flex-direction: column; align-items: flex-start; }
+
+  /* Modals fill the screen comfortably */
+  .modal, .modal-tabbed, .activity-modal {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 24px);
+    padding: 16px;
+  }
+  .modal-tabs { overflow-x: auto; scrollbar-width: none; }
+  .modal-tabs::-webkit-scrollbar { display: none; }
+  .modal-tab { white-space: nowrap; }
+
+  .toasts { left: 12px; right: 12px; bottom: 12px; align-items: stretch; text-align: center; }
+
+  /* iOS zooms the page when focusing inputs under 16px */
+  input, textarea, select { font-size: 16px !important; }
+}
+
+/* Touch devices: no hover, so surface the select control as a small
+   always-visible badge on the avatar's corner. */
+@media (hover: none) and (pointer: coarse) {
+  .card-check {
+    opacity: 1;
+    inset: auto -4px -4px auto;
+    width: 16px; height: 16px;
+  }
+  .card-check svg { width: 9px; height: 9px; }
+  .card.checked .card-check { inset: 0; width: auto; height: auto; }
+  .card.checked .card-check svg { width: 12px; height: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

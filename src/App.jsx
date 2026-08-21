@@ -27,6 +27,7 @@ export default function App() {
   const [settings, setSettings] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
   const [building, setBuilding] = useState(false);
   const [lastSweep, setLastSweep] = useState(null);
@@ -377,7 +378,7 @@ export default function App() {
   }
 
   return (
-    <div className="shell">
+    <div className={`shell ${selectedId ? 'detail-open' : ''}`}>
       <Sidebar
         pages={pages}
         counts={counts}
@@ -386,6 +387,8 @@ export default function App() {
         onReload={() => boot(true)}
         reloading={reloading}
         lastSweep={lastSweep}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
       <Queue
         page={page}
@@ -407,11 +410,13 @@ export default function App() {
         onBulk={handleBulk}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenActivity={() => setActivityOpen(true)}
+        onOpenSidebar={() => setSidebarOpen(true)}
       />
       <Detail
         comment={selected}
         page={page}
         notify={toast}
+        onBack={() => setSelectedId(null)}
         onAction={handleAction}
         onAiDraft={async (comment) => {
           try {

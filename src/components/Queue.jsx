@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { timeAgo } from '../api.js';
 import {
   CheckIcon, EyeIcon, EyeOffIcon, TrashIcon, ReplyIcon, RefreshIcon, SparkIcon, GearIcon,
-  ShieldIcon, ThumbIcon, SearchIcon, ClockIcon, FilterIcon,
+  ShieldIcon, ThumbIcon, SearchIcon, ClockIcon, FilterIcon, MenuIcon,
 } from './icons.jsx';
 
 const FILTERS = [
@@ -23,7 +23,7 @@ const DATES = [
 export default function Queue({
   page, comments, tab, setTab, filter, setFilter, selectedId, onSelect,
   onReview, onReviewAll, onRefresh, loading, queueTotal, sweeping, pulsing,
-  onQuickAction, onBulk, onOpenSettings, onOpenActivity,
+  onQuickAction, onBulk, onOpenSettings, onOpenActivity, onOpenSidebar,
 }) {
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -119,6 +119,9 @@ export default function Queue({
   return (
     <section className="queue">
       <header className="queue-head">
+        <button className="icon-btn mobile-only" onClick={onOpenSidebar} title="Pages" aria-label="Open pages menu">
+          <MenuIcon size={17} />
+        </button>
         <h1>{page ? page.name : 'Inbox'}</h1>
         <div className="queue-head-actions">
           <button className="icon-btn" onClick={onOpenActivity} title="Activity log" aria-label="Activity log">

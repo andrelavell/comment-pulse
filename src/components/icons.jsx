@@ -40,3 +40,5 @@ export const ClockIcon = (p) => <I {...p}><circle cx="12" cy="12" r="9" /><path 
 export const BookmarkIcon = (p) => <I {...p}><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z" /></I>;
 export const SquareCheckIcon = (p) => <I {...p}><rect x="3" y="3" width="18" height="18" rx="3" /><path d="m8.5 12 2.5 2.5L16 9" /></I>;
 export const FilterIcon = (p) => <I {...p}><path d="M4 5h16l-6.5 7.5V19l-3 2v-8.5Z" /></I>;
+export const MenuIcon = (p) => <I {...p}><path d="M4 6h16M4 12h16M4 18h16" /></I>;
+export const BackIcon = (p) => <I {...p}><path d="M15 5l-7 7 7 7" /></I>;
