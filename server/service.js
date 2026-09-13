@@ -1,6 +1,7 @@
 // Business logic shared by the local Express server and Netlify Functions.
 import { buildAdIndex, fetchPageComments, actions, GraphError } from './graph.js';
 import { kvGet, kvSet } from './storage.js';
+import { metaHealth, isGlobalGraphFailure } from './meta-health.js';
 import { loadState, saveState, normalizeSettings } from './store.js';
 import { logReply, draftReply, translateText, listFeedback, addFeedback, deleteFeedback } from './ai.js';
 import { logActivity, listActivity } from './activity.js';
@@ -8,7 +9,8 @@ import { listSavedReplies, addSavedReply, updateSavedReply, deleteSavedReply } f
 
 const snippet = (s) => String(s || '').slice(0, 160);
 
-const AD_INDEX_TTL = 30 * 60 * 1000;
+// Account discovery is expensive; comment sweeps still run every 15 minutes.
+const AD_INDEX_TTL = 6 * 60 * 60 * 1000;
 
 function decorate(c, state) {
   return {
@@ -52,6 +54,7 @@ async function autoHidePass(comments, pageId, state) {
         comment: snippet(c.message), detail: `matched "${kw}"`,
       });
     } catch (e) {
+      if (isGlobalGraphFailure(e) || e.retryAt) throw e;
       console.warn(`Auto-hide failed for ${c.id}: ${e.message}`);
     }
   }
@@ -60,25 +63,61 @@ async function autoHidePass(comments, pageId, state) {
 
 async function getAdIndexCached(force = false) {
   let cached = force ? null : await kvGet('cache', 'adIndex');
-  if (!cached || Date.now() - cached.builtAt > AD_INDEX_TTL) {
+  if (!cached || cached.version !== 2 || Date.now() - cached.builtAt > AD_INDEX_TTL) {
     cached = await buildAdIndex();
     await kvSet('cache', 'adIndex', cached);
+    await kvSet('cache', 'indexStatus', { at: Date.now(), error: null });
   }
   return cached;
 }
 
 export const service = {
-  // Returns { pages } (enabled pages only) or { building: true } when no index exists yet.
   async bootstrap({ force = false, allowBuild = true } = {}) {
     let cached = await kvGet('cache', 'adIndex');
-    const stale = !cached || Date.now() - cached.builtAt > AD_INDEX_TTL;
-    if ((force || stale) && allowBuild) cached = await getAdIndexCached(force);
-    if (!cached) return { building: true };
+    const cooldown = await metaHealth();
+    const syncStatus = await kvGet('cache', 'indexStatus');
     const { settings } = await loadState();
-    return { pages: cached.pages.filter((p) => settings.enabledPages.includes(p.id)) };
+    if (allowBuild && !cooldown && (force || !cached || cached.version !== 2 || Date.now() - cached.builtAt > AD_INDEX_TTL)) {
+      await this.syncIndex();
+      cached = await kvGet('cache', 'adIndex');
+    }
+    return {
+      pages: (cached?.pages || []).filter((p) => settings.enabledPages.includes(p.id)),
+      configuredPageCount: settings.enabledPages.length,
+      building: !cooldown && (syncStatus?.runningUntil > Date.now() || ((!cached || cached.version !== 2) && !syncStatus?.error)),
+      syncError: cooldown?.error || (allowBuild ? null : syncStatus?.error) || null,
+      retryAt: cooldown?.retryAt || null,
+    };
+  },
+
+  async beginIndexSync() {
+    const status = await kvGet('cache', 'indexStatus');
+    if (status?.runningUntil > Date.now()) return false;
+    await kvSet('cache', 'indexStatus', { runningUntil: Date.now() + 15 * 60 * 1000 });
+    return true;
+  },
+
+  async recordIndexError(message) {
+    await kvSet('cache', 'indexStatus', { error: message, errorAt: Date.now() });
+  },
+
+  async syncIndex() {
+    try {
+      const index = await getAdIndexCached(true);
+      await kvSet('cache', 'indexStatus', { at: Date.now(), error: null });
+      return index;
+    } catch (e) {
+      await kvSet('cache', 'indexStatus', { error: e.message, errorAt: Date.now() });
+      throw e;
+    }
   },
 
   async comments(pageId, { force = false } = {}) {
+    if (!/^\d+$/.test(String(pageId || ''))) {
+      const error = new Error('Select a Facebook page before loading comments.');
+      error.status = 400;
+      throw error;
+    }
     const state = await loadState();
     let cached = force ? null : await kvGet('cache', `comments/${pageId}`);
     if (!cached) {
@@ -98,8 +137,10 @@ export const service = {
       kvGet('cache', 'queueIds'),
       kvGet('cache', 'sweepStatus'),
     ]);
+    const cooldown = await metaHealth();
     const counts = {};
     for (const [pageId, info] of Object.entries(queueIds || {})) {
+      if (!state.settings.enabledPages.includes(pageId)) continue;
       counts[pageId] = {
         total: info.total,
         toReview: info.ids.filter((id) => !state.reviewed[id] && !state.autoHidden[id]).length,
@@ -107,8 +148,9 @@ export const service = {
     }
     return {
       counts,
-      lastSweep: sweepStatus?.at || null,
-      sweepError: sweepStatus?.error || null,
+      lastSweep: sweepStatus?.version === 2 ? sweepStatus.at || null : null,
+      sweepError: cooldown?.error || sweepStatus?.error || null,
+      retryAt: cooldown?.retryAt || null,
     };
   },
 
@@ -307,13 +349,15 @@ export const service = {
     return state.settings;
   },
 
-  // Full sweep: rebuild the ad index, refresh comments for every page,
+  // Reuse the ad index for six hours, refresh comments for enabled pages,
   // auto-hide matches, and store queue counts. Runs every 15 minutes.
   async sweep() {
     const started = Date.now();
-    const adIndex = await getAdIndexCached(true);
+    const adIndex = await getAdIndexCached();
     const state = await loadState();
+    const previousQueueIds = (await kvGet('cache', 'queueIds')) || {};
     const queueIds = {};
+    const errors = [];
     let hidden = 0;
     const pages = adIndex.pages.filter((p) => state.settings.enabledPages.includes(p.id));
     for (const page of pages) {
@@ -336,16 +380,27 @@ export const service = {
             .map((c) => c.id),
         };
       } catch (e) {
-        console.warn(`Sweep failed for ${page.name}: ${e.message}`);
+        errors.push(`${page.name}: ${e.message}`);
+        if (previousQueueIds[page.id]) queueIds[page.id] = previousQueueIds[page.id];
+        if (isGlobalGraphFailure(e) || e.retryAt) {
+          for (const p of pages) if (!queueIds[p.id] && previousQueueIds[p.id]) queueIds[p.id] = previousQueueIds[p.id];
+          break;
+        }
       }
     }
     await saveState(state);
     await kvSet('cache', 'queueIds', queueIds);
     const secs = Math.round((Date.now() - started) / 1000);
-    await kvSet('cache', 'sweepStatus', { at: Date.now(), pages: pages.length, hidden, seconds: secs });
+    const previousStatus = (await kvGet('cache', 'sweepStatus')) || {};
+    await kvSet('cache', 'sweepStatus', {
+      version: 2,
+      at: errors.length ? (previousStatus.version === 2 ? previousStatus.at || null : null) : Date.now(),
+      error: errors.length ? errors.join('; ') : null,
+      pages: pages.length, hidden, seconds: secs,
+    });
     console.log(`Sweep done in ${secs}s across ${pages.length} enabled pages` +
       (hidden > 0 ? `, auto-hid ${hidden} comment(s)` : ''));
-    return { ok: true, pages: pages.length, hidden, seconds: secs };
+    return { ok: errors.length === 0, errors, pages: pages.length, hidden, seconds: secs };
   },
 };
 

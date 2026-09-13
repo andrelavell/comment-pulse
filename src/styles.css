@@ -1266,3 +1266,7 @@ a { color: var(--ember); text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+.sync-error { padding: 14px 20px; background: #fff4e5; color: #784511; border-bottom: 1px solid #f1d1a4; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.foot-dot.uncertain { background: #e5a43c; }
+.icon-btn:disabled { opacity: .4; cursor: not-allowed; }

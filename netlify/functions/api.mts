@@ -29,23 +29,30 @@ export default async (req: Request, _context: Context) => {
     }
 
     if (method === "GET" && path === "/bootstrap") {
-      // Cold start with no index yet: kick off the background sweep and let
-      // the UI poll until it's ready, instead of timing out this function.
       const existing = await service.bootstrap({ allowBuild: false });
-      if (existing.building) {
-        await fetch(`${url.origin}/.netlify/functions/sweep-background`, {
-          method: "POST",
-          headers: { "x-sweep-key": sweepKey() },
-        });
-        return json({ building: true });
+      const force = url.searchParams.get("force") === "1";
+      if ((existing.building || force) && !existing.retryAt) {
+        if (await service.beginIndexSync()) {
+          try {
+            const response = await fetch(`${url.origin}/.netlify/functions/sweep-background`, {
+              method: "POST",
+              headers: { "x-sweep-key": sweepKey(), "Content-Type": "application/json" },
+              body: JSON.stringify({ indexOnly: true }),
+            });
+            if (!response.ok) throw new Error("Couldn't start page sync. Please try again.");
+          } catch (e: any) {
+            await service.recordIndexError(e.message);
+            throw e;
+          }
+        }
+        return json({ ...existing, building: true, syncError: null });
       }
-      // staleness is refreshed by the 15-minute sweep, not inline here
       return json(existing);
     }
 
     if (method === "GET" && path === "/comments") {
       const pageId = url.searchParams.get("pageId");
-      if (!pageId) return json({ error: "pageId required" }, 400);
+      if (!pageId || !/^\d+$/.test(pageId)) return json({ error: "Select a Facebook page before loading comments." }, 400);
       return json(await service.comments(pageId, { force: url.searchParams.get("force") === "1" }));
     }
 
@@ -98,9 +105,9 @@ export default async (req: Request, _context: Context) => {
 
     return json({ error: "Not found" }, 404);
   } catch (e: any) {
-    const status = e instanceof GraphError && e.status >= 400 ? e.status : 500;
+    const status = e.status >= 400 && e.status < 600 ? e.status : 500;
     console.error(e.message);
-    return json({ error: e.message, code: e.fb?.code }, status);
+    return json({ error: e.message, code: e.fb?.code, retryAt: e.retryAt }, status);
   }
 };
 

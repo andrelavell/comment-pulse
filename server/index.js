@@ -8,9 +8,9 @@ app.use(express.json());
 
 const wrap = (fn) => (req, res) =>
   fn(req, res).catch((e) => {
-    const status = e instanceof GraphError ? (e.status >= 400 ? e.status : 500) : 500;
+    const status = e.status >= 400 && e.status < 600 ? e.status : 500;
     console.error(e.message);
-    res.status(status).json({ error: e.message, code: e.fb?.code });
+    res.status(status).json({ error: e.message, code: e.fb?.code, retryAt: e.retryAt });
   });
 
 app.post('/api/login', wrap(async (req, res) => {
@@ -30,7 +30,7 @@ app.get('/api/bootstrap', wrap(async (req, res) =>
   res.json(await service.bootstrap({ force: req.query.force === '1' }))));
 
 app.get('/api/comments', wrap(async (req, res) => {
-  if (!req.query.pageId) return res.status(400).json({ error: 'pageId required' });
+  if (!/^\d+$/.test(String(req.query.pageId || ''))) return res.status(400).json({ error: 'pageId required' });
   res.json(await service.comments(req.query.pageId, { force: req.query.force === '1' }));
 }));
 

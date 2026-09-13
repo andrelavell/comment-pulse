@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
     "dev": "concurrently -n api,web -c yellow,cyan \"node server/index.js\" \"vite\"",
     "api": "node server/index.js",
     "web": "vite",
@@ -24,5 +24,10 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "vite": "^8.2.2"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "jsdom": "^30.0.1",
+    "vitest": "^5.0.0"
   }
 }

@@ -30,7 +30,7 @@ PORT=5177
 - Site: `comment-pulse` (https://app.netlify.com/projects/comment-pulse)
 - `netlify/functions/api.mts` serves `/api/*`
 - `netlify/functions/sweep-scheduled.mts` runs every 15 minutes and dispatches
-  `sweep-background.mts` (15-minute budget), which rebuilds the ad index,
+  `sweep-background.mts` (15-minute budget), which reuses the ad index for six hours,
   refreshes comments for every page, auto-hides keyword matches, and stores
   queue counts — so moderation happens even with no browser open
 - State (reviewed marks, bans, auto-hide log, keyword settings) lives in
@@ -59,3 +59,21 @@ PORT=5177
   comments, so most comments show as "Facebook user" and **Ban** is only
   enabled when Meta shares the commenter's ID. Fixing this requires App
   Review approval for the Business Asset User Profile Access feature.
+
+## Sync failures and recovery
+
+- Meta throttling (including error code 4) pauses Graph requests for one hour.
+  This cooldown is shared through Blobs, including across function restarts.
+  The existing 15-minute sweep resumes attempts after that delay; Meta may
+  still require more time, in which case a new cooldown begins.
+- Failed account discovery or comment reads never replace the last complete
+  cache with an empty or partial result. The inbox shows failures persistently
+  and labels cached counts as needing attention.
+- Full account discovery runs at most every six hours during scheduled sweeps.
+  The sidebar re-sync button requests an earlier rebuild when permitted. This
+  manual page sync only discovers pages/ads; it does not moderate comments.
+- With no enabled or available page, comment refresh is disabled and the UI
+  explains the missing page. Both API implementations reject invalid page IDs.
+
+Run `npm test` for mocked Meta/storage and UI regressions, then `npm run build`.
+Tests do not contact Meta or change moderation data.

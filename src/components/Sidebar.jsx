@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { timeAgo } from '../api.js';
 import { SearchIcon, RefreshIcon, InboxIcon } from './icons.jsx';
 
-export default function Sidebar({ pages, counts, selectedPageId, onSelect, onReload, reloading, lastSweep, open, onClose }) {
+export default function Sidebar({ pages, counts, selectedPageId, onSelect, onReload, reloading, lastSweep, statusError, countsLoaded, configuredPageCount, open, onClose }) {
   const [q, setQ] = useState('');
   const filtered = pages.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()));
-  const totalQueue = Object.values(counts).reduce((n, c) => n + (c?.toReview || 0), 0);
+  const totalQueue = pages.reduce((n, p) => n + (counts[p.id]?.toReview || 0), 0);
+  const complete = countsLoaded && pages.length > 0 && pages.every((p) => counts[p.id]);
 
   return (
     <>
@@ -34,6 +35,7 @@ export default function Sidebar({ pages, counts, selectedPageId, onSelect, onRel
         <button
           className={`icon-btn ${reloading ? 'spinning' : ''}`}
           onClick={onReload}
+          disabled={reloading}
           title="Re-sync pages and ads"
           aria-label="Re-sync pages and ads"
         >
@@ -68,17 +70,19 @@ export default function Sidebar({ pages, counts, selectedPageId, onSelect, onRel
             </button>
           );
         })}
-        {filtered.length === 0 && <div className="side-empty">No pages match "{q}"</div>}
+        {filtered.length === 0 && <div className="side-empty">{
+          pages.length ? `No pages match "${q}"` : statusError ? 'Pages unavailable. Re-sync when the connection recovers.' : configuredPageCount ? 'No pages loaded. Try re-syncing pages and ads.' : 'No pages enabled. Choose pages in Settings.'
+        }</div>}
       </nav>
 
       <div className="sidebar-foot">
         <div className="foot-row">
-          <span className="foot-dot" />
-          {totalQueue > 0 ? `${totalQueue} awaiting review` : 'Queues clear'}
+          <span className={`foot-dot ${statusError || !complete ? 'uncertain' : ''}`} />
+          {statusError ? 'Sync needs attention' : !pages.length ? 'No pages loaded' : !complete ? 'Queue status unavailable' : totalQueue > 0 ? `${totalQueue} awaiting review` : 'Queues clear'}
         </div>
         {lastSweep && (
           <div className="foot-sync" title={new Date(lastSweep).toLocaleString()}>
-            Last auto-check {timeAgo(lastSweep)} ago
+            Last successful check {timeAgo(lastSweep)} ago
           </div>
         )}
       </div>

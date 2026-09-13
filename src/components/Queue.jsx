@@ -24,6 +24,7 @@ export default function Queue({
   page, comments, tab, setTab, filter, setFilter, selectedId, onSelect,
   onReview, onReviewAll, onRefresh, loading, queueTotal, sweeping, pulsing,
   onQuickAction, onBulk, onOpenSettings, onOpenActivity, onOpenSidebar,
+  error, retryAt, configuredPageCount,
 }) {
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -130,7 +131,7 @@ export default function Queue({
           <button className="icon-btn" onClick={onOpenSettings} title="Moderation settings" aria-label="Moderation settings">
             <GearIcon size={15} />
           </button>
-          <button className={`icon-btn ${loading ? 'spinning' : ''}`} onClick={onRefresh} title="Refresh comments" aria-label="Refresh comments">
+          <button className={`icon-btn ${loading ? 'spinning' : ''}`} onClick={onRefresh} disabled={!page || loading || retryAt > Date.now()} title="Refresh comments" aria-label="Refresh comments">
             <RefreshIcon size={15} />
           </button>
         </div>
@@ -262,11 +263,22 @@ export default function Queue({
         </div>
       )}
 
+      {error && <div className="sync-error" role="alert">
+        <strong>Comments may be out of date</strong>
+        <span>{error}</span>
+        {retryAt > Date.now() && <span>Next retry after {new Date(retryAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</span>}
+      </div>}
+
       <div className={`card-list ${selecting ? 'selecting' : ''}`}>
         {loading && comments.length === 0 && (
           <div className="queue-empty"><span className="loader" /> Loading comments…</div>
         )}
-        {!loading && list.length === 0 && (
+        {!page && !loading && <div className="queue-empty">
+          <strong>{configuredPageCount ? 'No pages available' : 'Choose pages to get started'}</strong>
+          <span>{configuredPageCount ? 'Re-sync pages and ads using the refresh button in the sidebar.' : 'Enable a Facebook page in Settings to load its comments.'}</span>
+          {!configuredPageCount && <button className="pill-btn primary" onClick={onOpenSettings}>Open Settings</button>}
+        </div>}
+        {page && !error && !loading && list.length === 0 && (
           <div className="queue-empty">
             {filtersActive && comments.length > 0 ? (
               <>

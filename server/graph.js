@@ -1,4 +1,5 @@
 import { env } from './storage.js';
+import { assertMetaReady, isRateLimit, isGlobalGraphFailure, recordMetaLimit } from './meta-health.js';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
@@ -17,6 +18,7 @@ function userToken() {
 }
 
 export async function g(path, params = {}, token = userToken(), method = 'GET') {
+  await assertMetaReady();
   const url = new URL(`${GRAPH}/${path}`);
   const body = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -29,7 +31,14 @@ export async function g(path, params = {}, token = userToken(), method = 'GET') 
 
   const res = await fetch(url, method === 'GET' ? {} : { method, body });
   const json = await res.json().catch(() => ({}));
-  if (json.error) throw new GraphError(json.error, res.status);
+  if (!res.ok || json.error) {
+    const error = new GraphError(json.error || { message: `Meta request failed (${res.status})` }, res.status);
+    if (isRateLimit(error)) {
+      error.status = 429;
+      await recordMetaLimit(error);
+    }
+    throw error;
+  }
   return json;
 }
 
@@ -63,7 +72,8 @@ export async function resolvePage(pageId) {
     pageTokens.set(pageId, p.access_token);
     const { access_token, ...rest } = p;
     return rest;
-  } catch {
+  } catch (e) {
+    if (isGlobalGraphFailure(e) || e.retryAt) throw e;
     return null;
   }
 }
@@ -73,9 +83,10 @@ export async function buildAdIndex() {
   const accounts = await gAll('me/adaccounts', { fields: 'id,name,account_status', limit: 100 });
   const index = {};
   const queue = accounts.filter((a) => a.account_status === 1);
+  let failure = null;
 
   async function worker() {
-    while (queue.length) {
+    while (queue.length && !failure) {
       const acct = queue.shift();
       try {
         const ads = await gAll(
@@ -100,19 +111,23 @@ export async function buildAdIndex() {
           if ((ad.updated_time || '') > entry.lastUpdated) entry.lastUpdated = ad.updated_time || '';
         }
       } catch (e) {
-        console.warn(`Ad fetch failed for ${acct.name}: ${e.message}`);
+        failure ||= e; // Never publish an incomplete index as a successful sync.
       }
     }
   }
   await Promise.all(Array.from({ length: 4 }, worker));
+  if (failure) throw failure;
 
   const pages = [];
   for (const pageId of Object.keys(index)) {
     const p = await resolvePage(pageId);
     if (p) pages.push({ ...p, adPosts: Object.keys(index[pageId]).length });
   }
+  if (Object.keys(index).length && !pages.length) {
+    throw new GraphError({ message: 'Meta returned ad posts, but none of their pages could be accessed. Check page permissions.' }, 403);
+  }
   pages.sort((a, b) => b.adPosts - a.adPosts);
-  return { pages, index, builtAt: Date.now() };
+  return { pages, index, builtAt: Date.now(), version: 2 };
 }
 
 // ---------- Post meta (ad creative context) ----------
@@ -123,7 +138,8 @@ async function getPostMeta(storyId, token) {
     const meta = await g(storyId, { fields: 'message,full_picture,permalink_url,created_time' }, token);
     postMeta.set(storyId, meta);
     return meta;
-  } catch {
+  } catch (e) {
+    if (isGlobalGraphFailure(e) || e.retryAt) throw e;
     const fallback = { id: storyId };
     postMeta.set(storyId, fallback);
     return fallback;
@@ -175,13 +191,15 @@ export async function fetchPageComments(pageId, postsById, { maxPosts = 40, maxO
         max
       );
     } catch (e) {
+      if (isGlobalGraphFailure(e) || e.retryAt) throw e;
       console.warn(`${edge} fetch failed for ${pageId}: ${e.message}`);
     }
   }
   const all = [];
   const queue = [...posts];
+  let failure = null;
   async function worker() {
-    while (queue.length) {
+    while (queue.length && !failure) {
       const post = queue.shift();
       try {
         const [meta, comments] = await Promise.all([
@@ -219,11 +237,12 @@ export async function fetchPageComments(pageId, postsById, { maxPosts = 40, maxO
           });
         }
       } catch (e) {
-        console.warn(`Comments fetch failed for ${post.storyId}: ${e.message}`);
+        failure ||= e; // Preserve the previous complete comment cache on failure.
       }
     }
   }
   await Promise.all(Array.from({ length: 5 }, worker));
+  if (failure) throw failure;
   all.sort((a, b) => b.created_time.localeCompare(a.created_time));
   // Ad variant posts can share one comment stream, so the same comment can
   // arrive under several post ids. Keep one copy, preferring the entry that

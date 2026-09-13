@@ -8,6 +8,7 @@ async function req(path, opts = {}) {
   if (!res.ok) {
     const err = new Error(json.error || `Request failed (${res.status})`);
     err.status = res.status;
+    err.retryAt = json.retryAt;
     err.authRequired = Boolean(json.authRequired);
     throw err;
   }
@@ -17,7 +18,10 @@ async function req(path, opts = {}) {
 export const api = {
   login: (password) => req('/api/login', { method: 'POST', body: { password } }),
   bootstrap: (force) => req(`/api/bootstrap${force ? '?force=1' : ''}`),
-  comments: (pageId, force) => req(`/api/comments?pageId=${pageId}${force ? '&force=1' : ''}`),
+  comments: (pageId, force) => {
+    if (!/^\d+$/.test(String(pageId || ''))) return Promise.reject(new Error('Select a Facebook page before loading comments.'));
+    return req(`/api/comments?pageId=${encodeURIComponent(pageId)}${force ? '&force=1' : ''}`);
+  },
   overview: () => req('/api/overview'),
   review: (commentIds, reviewed) => req('/api/review', { method: 'POST', body: { commentIds, reviewed } }),
   reply: (commentId, pageId, message) =>

@@ -31,6 +31,15 @@ export default function App() {
   const [needsLogin, setNeedsLogin] = useState(false);
   const [building, setBuilding] = useState(false);
   const [lastSweep, setLastSweep] = useState(null);
+  const [syncError, setSyncError] = useState(null);
+  const [overviewError, setOverviewError] = useState(null);
+  const [commentsError, setCommentsError] = useState(null);
+  const [retryAt, setRetryAt] = useState(null);
+  const [configuredPageCount, setConfiguredPageCount] = useState(0);
+  const [countsLoaded, setCountsLoaded] = useState(false);
+  const activePage = useRef(null);
+  const commentRequest = useRef(0);
+  const bootTimer = useRef(null);
   const queueTotal = useRef(0);
 
   const toast = useCallback((text, kind = 'info') => {
@@ -41,23 +50,33 @@ export default function App() {
 
   const refreshCounts = useCallback(async () => {
     try {
-      const { counts, lastSweep } = await api.overview();
+      const { counts, lastSweep, sweepError, retryAt } = await api.overview();
       setCounts((c) => ({ ...c, ...counts }));
       setLastSweep(lastSweep);
-    } catch {}
+      setOverviewError(sweepError || null);
+      setRetryAt(retryAt || null);
+      setCountsLoaded(true);
+    } catch (e) {
+      if (e.authRequired) setNeedsLogin(true);
+      else setOverviewError("Couldn't refresh queue status. " + e.message);
+    }
   }, []);
 
   const boot = useCallback(async (force = false) => {
+    clearTimeout(bootTimer.current);
     setReloading(true);
     try {
       const res = await api.bootstrap(force);
+      setSyncError(res.syncError || null);
+      setRetryAt(res.retryAt || null);
+      setConfiguredPageCount(res.configuredPageCount || 0);
       if (res.building) {
         // First-ever load: the server is syncing pages and ads in the
         // background. Poll until the index is ready.
         setBuilding(true);
         setBooting(false);
         setReloading(false);
-        setTimeout(() => boot(), 8000);
+        bootTimer.current = setTimeout(() => boot(), 8000);
         return;
       }
       setBuilding(false);
@@ -65,22 +84,29 @@ export default function App() {
       setBootError(null);
       setNeedsLogin(false);
       refreshCounts();
-      if (res.pages.length && !res.pages.some((p) => p.id === pageId)) {
-        setPageId(res.pages[0].id);
-      }
+      setPageId((current) => res.pages.some((p) => p.id === current) ? current : res.pages[0]?.id || null);
+      api.settings().then(setSettings).catch(() => {});
     } catch (e) {
+      setBuilding(false);
       if (e.authRequired) setNeedsLogin(true);
       else setBootError(e.message);
     } finally {
       setBooting(false);
       setReloading(false);
     }
-  }, [pageId]);
+  }, [refreshCounts]);
 
   useEffect(() => {
     boot();
     api.settings().then(setSettings).catch(() => {});
+    return () => clearTimeout(bootTimer.current);
   }, []); // eslint-disable-line
+
+  useEffect(() => {
+    if (!syncError || building || needsLogin) return;
+    const timer = setInterval(() => boot(), 60000);
+    return () => clearInterval(timer);
+  }, [syncError, building, needsLogin, boot]);
 
   const onLogin = () => {
     setNeedsLogin(false);
@@ -102,9 +128,13 @@ export default function App() {
   };
 
   const loadComments = useCallback(async (pid, force = false) => {
+    if (!pid) return;
+    const requestId = ++commentRequest.current;
     setLoading(true);
+    setCommentsError(null);
     try {
       const { comments } = await api.comments(pid, force);
+      if (activePage.current !== pid || requestId !== commentRequest.current) return;
       setComments(comments);
       const toReview = comments.filter(
         (c) => !c.reviewed && !c.autoHidden && !c.is_hidden && !c.replies?.some((r) => r.isPageAuthor)
@@ -112,19 +142,26 @@ export default function App() {
       queueTotal.current = Math.max(toReview, queueTotal.current && !force ? queueTotal.current : toReview);
       setCounts((c) => ({ ...c, [pid]: { total: comments.length, toReview } }));
     } catch (e) {
+      if (activePage.current !== pid || requestId !== commentRequest.current) return;
       if (e.authRequired) setNeedsLogin(true);
-      else toast(e.message, 'error');
+      else {
+        setCommentsError(e.message);
+        if (e.retryAt) setRetryAt(e.retryAt);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === commentRequest.current) setLoading(false);
     }
   }, [toast]);
 
   useEffect(() => {
-    if (!pageId) return;
+    activePage.current = pageId;
+    commentRequest.current++;
+    setLoading(false);
+    setCommentsError(null);
     setComments([]);
     setSelectedId(null);
     queueTotal.current = 0;
-    loadComments(pageId);
+    if (pageId) loadComments(pageId);
   }, [pageId, loadComments]);
 
   useEffect(() => {
@@ -387,6 +424,9 @@ export default function App() {
         onReload={() => boot(true)}
         reloading={reloading}
         lastSweep={lastSweep}
+        statusError={syncError || overviewError || commentsError}
+        countsLoaded={countsLoaded}
+        configuredPageCount={configuredPageCount}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
@@ -403,6 +443,9 @@ export default function App() {
         onReviewAll={handleReviewAll}
         onRefresh={() => loadComments(pageId, true)}
         loading={loading}
+        error={commentsError || syncError || overviewError}
+        retryAt={retryAt}
+        configuredPageCount={configuredPageCount}
         queueTotal={queueTotal.current}
         sweeping={sweeping}
         pulsing={pulsing}
